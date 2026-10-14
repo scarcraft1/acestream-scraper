@@ -3647,6 +3647,18 @@ export interface components {
       max_channels: number;
       /** Only Online */
       only_online: boolean;
+      /**
+       * Source Start Seconds
+       * @description Seconds a source gets to deliver its first byte before the next is tried
+       * @default 30
+       */
+      source_start_seconds?: number;
+      /**
+       * Startup Budget Seconds
+       * @description Seconds for the whole start across sources; keep it under the player's timeout (Kodi: 60)
+       * @default 55
+       */
+      startup_budget_seconds?: number;
       /** Tuner Count */
       tuner_count: number;
     };
@@ -3660,6 +3672,10 @@ export interface components {
       max_channels?: number | null;
       /** Only Online */
       only_online?: boolean | null;
+      /** Source Start Seconds */
+      source_start_seconds?: number | null;
+      /** Startup Budget Seconds */
+      startup_budget_seconds?: number | null;
       /** Tuner Count */
       tuner_count?: number | null;
     };

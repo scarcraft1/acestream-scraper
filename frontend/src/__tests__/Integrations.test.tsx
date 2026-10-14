@@ -569,6 +569,29 @@ describe('Integrations page', () => {
     await waitFor(() => expect(mockUpdateTunerSettings).toHaveBeenCalledWith(expect.objectContaining({ tuner_count: 2, max_channels: 300 })));
   });
 
+  it('lets a slow engine have more time to start a channel', async () => {
+    // A cold acestream took 17.4 s on the box against 15 s per source: those
+    // channels always failed cold. Óscar wants it in the interface.
+    renderPage();
+    const section = screen.getByRole('region', { name: 'Media servers' });
+    fireEvent.click(within(section).getByRole('button', { name: 'Tuner settings' }));
+    const perSource = within(section).getByRole('spinbutton', { name: 'Seconds per source' });
+    const total = within(section).getByRole('spinbutton', { name: 'Seconds to start a channel' });
+    const save = within(section).getByRole('button', { name: 'Save tuner settings' });
+    expect(perSource).toHaveValue(30);
+    expect(total).toHaveValue(55);
+
+    fireEvent.change(perSource, { target: { value: '200' } });
+    expect(within(section).getByText('Enter a whole number between 5 and 180.')).toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    fireEvent.change(perSource, { target: { value: '40' } });
+    fireEvent.change(total, { target: { value: '58' } });
+    fireEvent.click(save);
+    await waitFor(() => expect(mockUpdateTunerSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ source_start_seconds: 40, startup_budget_seconds: 58 })));
+  });
+
   it('requires explicitly enabling experimental transcoding recovery', async () => {
     renderPage();
     const section = screen.getByRole('region', { name: 'Media servers' });

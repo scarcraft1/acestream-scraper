@@ -271,6 +271,59 @@ class TaskService:
         with self._state_lock:
             state["progress"] = dict(progress) if progress is not None else None
 
+    # Jobs that only download files and are safe to run as soon as the
+    # application starts. A WHITELIST on purpose:
+    #   channel_status       opens engine sessions; on a small box that is
+    #                        already loading its catalogue it chokes it
+    #   epg_program_cleanup  is the one that EMPTIES the guide; running it
+    #                        early would make the problem worse
+    #   channel_cleanup      deletes; let it keep its own time
+    # Guide first: an empty guide is what the viewer sees.
+    CATCH_UP_JOBS = ("epg_refresh", "url_scraping")
+
+    def catch_up_missed_runs(self, job_ids=CATCH_UP_JOBS, stagger_seconds: int = 300,
+                             now: Optional[datetime] = None) -> list:
+        """Run now the jobs whose last run is older than their interval.
+
+        Interval jobs live in memory and are re-created on every start, so
+        their first run lands one whole interval after startup. A machine
+        that is only switched on for a few hours never reaches it: on a real
+        box `epg_refresh` (6 h) had never run, while `epg_program_cleanup`
+        (1 h) kept deleting expired programmes -- the guide emptied itself.
+        `last_run` is persisted and restored, so we can tell.
+
+        A job with a user-set start time is left alone: whoever asked for
+        04:00 wants 04:00. Jobs are staggered so a small box does not fetch
+        playlists and guides at once.
+
+        Returns the job ids that were brought forward.
+        """
+        now = now or datetime.now(timezone.utc)
+        brought = []
+        for job_id in job_ids:
+            if self._schedule_anchors.get(job_id):
+                continue
+            interval = self._interval_seconds.get(job_id)
+            if not interval or self.scheduler.get_job(job_id) is None:
+                continue
+            last = (self.get_task_state(job_id) or {}).get("last_run")
+            if isinstance(last, str):
+                try:
+                    last = datetime.fromisoformat(last)
+                except ValueError:
+                    last = None
+            if last is not None and last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if last is not None and (now - last).total_seconds() < interval:
+                continue
+            when = now + timedelta(seconds=stagger_seconds * len(brought))
+            self.scheduler.modify_job(job_id, next_run_time=when)
+            self.logger.info(
+                "Catching up task '%s' (last run %s, interval %ss): runs at %s",
+                job_id, last or "never", interval, when.isoformat())
+            brought.append(job_id)
+        return brought
+
     def run_task_now(self, job_id: str) -> str:
         """Trigger a scheduled job to run immediately, outside its interval.
 

@@ -20,15 +20,22 @@ HEADERS = {
 # Playback needs no header.
 PLAY_HEADERS: Dict[str, str] = {}
 
-# The API also lists the portal, Flooxer, ViX, Kidz and a podcast: not
-# linear TV channels.
-TV_CHANNELS = {'Antena 3', 'laSexta', 'Neox', 'Nova', 'Mega', 'Atreseries'}
+# Title -> guide id. The API also lists the portal, Flooxer, ViX, Kidz and a
+# podcast: not linear TV channels. The ids are dobleM's (guiaiptv.xml), which
+# has all six a week ahead; TDTChannels' guide has none of them.
+TV_CHANNELS = {
+    'Antena 3': 'Antena 3 HD',
+    'laSexta': 'La Sexta HD',
+    'Neox': 'Neox',
+    'Nova': 'Nova',
+    'Mega': 'Mega',
+    'Atreseries': 'Atreseries',
+}
 
 
 def channels() -> List[Dict[str, Optional[str]]]:
-    # Asked for rather than written down: a channel they add appears alone.
     data = base.http.get_json(f'{API}/client/v1/info/channels', HEADERS)
-    return [{'ident': c['id'], 'name': c['title'], 'tvg_id': None}
+    return [{'ident': c['id'], 'name': c['title'], 'tvg_id': TV_CHANNELS[c['title']]}
             for c in data
             if c.get('title') in TV_CHANNELS and c.get('id')]
 

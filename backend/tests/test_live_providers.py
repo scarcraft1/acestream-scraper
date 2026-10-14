@@ -101,6 +101,9 @@ def test_ATRESPLAYER_PIDE_SUS_CANALES_Y_SOLO_LOS_DE_TELE(fake):
     assert set(streams) == {'Antena 3', 'Nova'}
     assert streams['Nova']['stream_url'] == 'atresplayer://nv'
     assert 'stream_headers' not in streams['Nova']
+    # dobleM's ids: the only public guide found with all six.
+    assert streams['Antena 3']['tvg_id'] == 'Antena 3 HD'
+    assert streams['Nova']['tvg_id'] == 'Nova'
 
 
 def test_LA_WEB_DE_LA_CADENA_NO_SE_DESCARGA(fake, monkeypatch):
@@ -196,7 +199,7 @@ def test_ABRIR_REDIRIGE_AL_ENLACE_RECIEN_FIRMADO(lan, client, db_session, monkey
     assert asked == ['mediaset://T5']
 
 
-def test_UNA_APERTURA_RESUELVE_UNA_VEZ_Y_ACEPTA_HEAD(lan, client, db_session, monkeypatch):
+def test_UNA_APERTURA_RESUELVE_UNA_VEZ_Y_EL_HEAD_NO_ESPERA(lan, client, db_session, monkeypatch):
     """Kodi opens with HEAD, then two GETs: one resolution, not three."""
     from app.api.endpoints import live
     stream = _stream('mediaset://T5')
@@ -208,7 +211,11 @@ def test_UNA_APERTURA_RESUELVE_UNA_VEZ_Y_ACEPTA_HEAD(lan, client, db_session, mo
     clock = [1000.0]
     monkeypatch.setattr(live.time, 'monotonic', lambda: clock[0])
     head = client.head(f'/live/{stream.id}', follow_redirects=False)
-    assert head.status_code == 302
+    # Answered at once, without resolving: Kodi gives it five seconds and
+    # Mediaset takes about six.
+    assert head.status_code == 200
+    assert head.headers['content-type'] == 'application/vnd.apple.mpegurl'
+    assert asked == []
     for _ in range(2):
         assert client.get(f'/live/{stream.id}', follow_redirects=False).headers['location'] == 'https://dai/1.m3u8'
     assert len(asked) == 1
@@ -241,6 +248,7 @@ def test_LO_QUE_NO_ES_DE_UNA_CADENA_ES_404_Y_NO_LA_WEB(lan, client, db_session, 
     response = client.get(f'/live/{stream_id}', follow_redirects=False)
     assert response.status_code == 404
     assert response.headers['content-type'].startswith('application/json')
+    assert client.head(f'/live/{stream_id}', follow_redirects=False).status_code == 404
 
 
 # --- resolving each one -----------------------------------------------------

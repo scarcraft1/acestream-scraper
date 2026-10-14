@@ -19,9 +19,10 @@ META = 'https://www.dailymotion.com/player/metadata/video/%s?embedder=%s'
 HEADERS = {'User-Agent': base.USER_AGENT, 'Referer': WEB, 'Origin': WEB.rstrip('/')}
 PLAY_HEADERS = {'Referer': WEB}
 
-# Dailymotion id -> (name, guide id).
+# Dailymotion id -> (name, guide id). dobleM's id: a week ahead, where
+# TDTChannels' 7Rioja.TV has the same programmes but only today.
 CHANNELS = {
-    'x8dhao1': ('7 TV La Rioja', '7Rioja.TV'),
+    'x8dhao1': ('7 TV La Rioja', 'La 7 Rioja'),
 }
 
 

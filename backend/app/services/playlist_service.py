@@ -15,6 +15,7 @@ from app.utils.m3u import m3u_attr
 
 
 LIVE_MIMETYPE_PROP = '#KODIPROP:mimetype=application/vnd.apple.mpegurl'
+RELAY_MIMETYPE_PROP = '#KODIPROP:mimetype=video/mp2t'
 
 
 class PlaylistService:
@@ -328,7 +329,7 @@ class PlaylistService:
 
     def _link_lines(self, link: str) -> List[str]:
         """The lines that open a stream: its link, preceded by the mimetype
-        when it goes through /live/.
+        when it goes through /live/ or the tuner relay.
 
         Without it IPTV Simple finds out the type by opening the link in
         Kodi's INTERFACE thread, twice. Against a broadcaster that does not
@@ -340,6 +341,13 @@ class PlaylistService:
         from app.services import live_providers
         if self.live_base_url and link.startswith(f"{self.live_base_url.rstrip('/')}{live_providers.LIVE_PATH}"):
             return [LIVE_MIMETYPE_PROP, link]
+        # The tuner relay always answers MPEG-TS, and opening an acestream
+        # through it is when Kodi waits longest: a dead channel left the
+        # remote dead for 13 s while it probed the type, 0 s with this line;
+        # a live one showed video at 5.5 s instead of 8.5 s (kodi-53, bank
+        # engine). Other link formats are the user's and may be anything.
+        if '/tuner/channel/' in link or '/tuner/stream/' in link:
+            return [RELAY_MIMETYPE_PROP, link]
         return [link]
 
     @staticmethod

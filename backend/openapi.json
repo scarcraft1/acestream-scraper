@@ -5353,6 +5353,17 @@
       "TVChannelCreate": {
         "description": "Schema for TV channel creation",
         "properties": {
+          "agenda_epg_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agenda Epg Id"
+          },
           "category": {
             "anyOf": [
               {
@@ -5730,6 +5741,17 @@
             "title": "Acestream Channels",
             "type": "array"
           },
+          "agenda_epg_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agenda Epg Id"
+          },
           "category": {
             "anyOf": [
               {
@@ -5898,6 +5920,17 @@
       "TVChannelUpdate": {
         "description": "Schema for TV channel update",
         "properties": {
+          "agenda_epg_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agenda Epg Id"
+          },
           "category": {
             "anyOf": [
               {

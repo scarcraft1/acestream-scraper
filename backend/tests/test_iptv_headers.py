@@ -96,3 +96,40 @@ def test_LA_LISTA_LAS_PUBLICA(client, db_session):
     r = client.get("/playlist.m3u", params={"only_online": "false"})
     assert r.status_code == 200, r.text
     assert URL + "|Referer=https%3A%2F%2Fplayer.instantvideocloud.net%2F" in r.text, r.text
+
+
+# A stream without headers stored the JSON text 'null', which SQL counts as
+# NOT NULL: on the fork's test database `stream_headers IS NOT NULL` said 576
+# of 576 IPTV streams had headers when 36 did.
+
+def test_SIN_CABECERAS_SE_GUARDA_NULL_DE_VERDAD(db_session):
+    from sqlalchemy import text
+    db_session.add(AcestreamChannel(id=f"url:{uuid.uuid4().hex}", name="Sin",
+                                    stream_url=URL, stream_headers=None))
+    db_session.commit()
+    assert db_session.execute(text(
+        "SELECT count(*) FROM acestream_channels WHERE stream_headers IS NOT NULL"
+    )).scalar_one() == 0
+
+
+def test_LA_MIGRACION_LIMPIA_LOS_NULL_DE_TEXTO(tmp_path):
+    from sqlalchemy import create_engine, text
+    from migration_test_utils import database_url_for, upgrade_to_revision
+
+    db_path = tmp_path / 'null-headers.db'
+    upgrade_to_revision(db_path, '20261014_1400')
+    engine = create_engine(database_url_for(db_path))
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(
+                "INSERT INTO acestream_channels (id, name, stream_headers) VALUES "
+                "('a', 'Sin', 'null'), ('b', 'Con', '{\"Referer\": \"https://x/\"}')"
+            ))
+        upgrade_to_revision(db_path, '20261014_1500')
+        with engine.connect() as connection:
+            rows = dict(connection.execute(text(
+                "SELECT id, stream_headers FROM acestream_channels"
+            )).all())
+        assert rows == {'a': None, 'b': '{"Referer": "https://x/"}'}
+    finally:
+        engine.dispose()

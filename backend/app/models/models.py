@@ -137,7 +137,9 @@ class AcestreamChannel(Base):
     stream_url = Column(String(2048), nullable=True)
     # HTTP headers the source playlist publishes for `stream_url`
     # (User-Agent, Referer, Origin). Some CDNs answer 403 without them.
-    stream_headers = Column(JSON, nullable=True)
+    # none_as_null: without it None is stored as the JSON text 'null', which
+    # SQL counts as NOT NULL.
+    stream_headers = Column(JSON(none_as_null=True), nullable=True)
     epg_update_protected = Column(Boolean, default=False)
 
     # Relationship with TVChannel

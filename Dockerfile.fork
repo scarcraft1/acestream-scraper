@@ -1,0 +1,36 @@
+# The fork's code on top of an upstream image, nothing else.
+#
+# The upstream image already carries the engine, Acexy, ffmpeg, ZeroNet and
+# the Python dependencies (backend/requirements.txt is unchanged in this
+# fork). Rebuilding all that on an A55 would take hours; this only swaps the
+# application code and the compiled interface, so it builds on the device
+# itself without emulation: the Python copy is architecture-independent and
+# the interface stage runs on the build platform.
+#
+# BASE_IMAGE is pinned by digest on purpose: a floating tag would update the
+# engine and everything else behind the user's back. The default is the
+# multi-arch index of the `develop` image every test of this fork ran on
+# (built 2026-10-09). A box that must keep the image it already has passes
+# its own digest:
+#
+#   docker build -f Dockerfile.fork --build-arg BASE_IMAGE=docker.io/pipepito/acestream-scraper@sha256:<its digest> .
+#
+# With podman, add `--format docker`: the default OCI format drops the
+# upstream HEALTHCHECK without failing.
+ARG BASE_IMAGE=docker.io/pipepito/acestream-scraper@sha256:f7a91ffa8217e3cfe962c418d7165600152a6a3e28fb255d57b2eb81f9d1aad8
+
+FROM --platform=$BUILDPLATFORM docker.io/library/node:20-slim AS interface
+WORKDIR /src
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN ./node_modules/.bin/vite build
+
+FROM ${BASE_IMAGE}
+# Replaced, not merged: a module deleted in the fork must not linger from
+# the upstream copy and still be imported.
+RUN rm -rf /app/app /app/migrations /app/frontend_build
+COPY backend/app /app/app
+COPY backend/main.py /app/main.py
+COPY backend/migrations /app/migrations
+COPY --from=interface /src/dist/ /app/frontend_build/

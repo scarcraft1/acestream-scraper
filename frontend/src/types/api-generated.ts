@@ -3333,6 +3333,8 @@ export interface components {
      * @description Schema for TV channel creation
      */
     TVChannelCreate: {
+      /** Agenda Epg Id */
+      agenda_epg_id?: string | null;
       /** Category */
       category?: string | null;
       /** Channel Number */
@@ -3458,6 +3460,8 @@ export interface components {
        * @default []
        */
       acestream_channels?: components["schemas"]["AcestreamChannelResponse"][];
+      /** Agenda Epg Id */
+      agenda_epg_id?: string | null;
       /** Category */
       category?: string | null;
       /** Channel Number */
@@ -3511,6 +3515,8 @@ export interface components {
      * @description Schema for TV channel update
      */
     TVChannelUpdate: {
+      /** Agenda Epg Id */
+      agenda_epg_id?: string | null;
       /** Category */
       category?: string | null;
       /** Channel Number */

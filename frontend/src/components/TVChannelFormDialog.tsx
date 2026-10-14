@@ -83,6 +83,16 @@ const TVChannelFormDialog: React.FC<TVChannelFormDialogProps> = ({
             <TextField name="country" label="Country" fullWidth value={formData.country || ''} onChange={onChange} />
             <TextField name="language" label="Language" fullWidth value={formData.language || ''} onChange={onChange} />
             {mode === 'edit' ? <TextField name="epg_id" label="EPG ID" fullWidth value={formData.epg_id || ''} onChange={onChange} /> : null}
+            {mode === 'edit' ? (
+              <TextField
+                name="agenda_epg_id"
+                label="Football agenda ID"
+                fullWidth
+                value={formData.agenda_epg_id || ''}
+                onChange={onChange}
+                helperText="Matches shown over the regular guide, e.g. futbolenlatv.m-plus-laliga"
+              />
+            ) : null}
             <TextField name="channel_number" label="Channel Number" type="number" fullWidth value={formData.channel_number || ''} onChange={onChange} />
           </Stack>
         </Box>

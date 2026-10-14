@@ -339,7 +339,12 @@ class PlaylistService:
         """
         if stream_url:
             from app.services import live_providers
-            if live_providers.for_stream_url(stream_url) is not None:
+            from app.services.hls_manifest import needs_manifest
+            if live_base_url and needs_manifest(stream_url, stream_headers):
+                # Its manifests are served by us, whole: ffmpeg reads them
+                # cut short from the CDN. Segments still go straight to it.
+                stream_url = f"{live_base_url.rstrip('/')}{live_providers.LIVE_PATH}{quote(str(channel_id), safe='')}"
+            elif live_providers.for_stream_url(stream_url) is not None:
                 # Its link expires: point the player at the route that signs
                 # a new one when the channel is opened.
                 if not live_base_url:

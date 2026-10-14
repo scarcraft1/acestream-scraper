@@ -1,14 +1,22 @@
-"""`/live/{stream_id}`: resolve a broadcaster's live channel when it is opened.
+"""`/live/{stream_id}`: open a stream that cannot be handed to the player as is.
+
+Two kinds go through here:
+
+- A broadcaster's live channel (`mediaset://T5`): resolved when opened and
+  answered with a redirect to the freshly signed link.
+- An HLS stream whose playlist publishes headers (101TV, PTV...): its
+  manifests are fetched with those headers and served whole, because ffmpeg
+  reads them cut short from the CDN and drops the list. See hls_manifest.
 
 Mounted on the app, not on the API router: a player following a playlist
 link cannot send the API token. Gated on TUNER_ALLOWED_NETWORKS instead,
 like the tuner routes.
 
-Answers with a redirect to the freshly signed link. The playback headers
-travel in the playlist entry (`url|Referer=...`); Kodi keeps sending them
-after the redirect and to every segment.
+The playback headers travel in the playlist entry (`url|Referer=...`);
+Kodi keeps sending them after a redirect and to every segment.
 """
 import time
+from urllib.parse import quote, urljoin
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
@@ -17,8 +25,9 @@ from sqlalchemy.orm import Session
 
 from app.config.database import get_db
 from app.models.models import AcestreamChannel
-from app.services import live_providers
+from app.services import hls_manifest, live_providers
 from app.services.tuner_network import require_tuner_network
+from app.utils.outbound_http import source_get
 
 live_router = APIRouter(prefix="/live", dependencies=[Depends(require_tuner_network)], tags=["live"])
 
@@ -29,6 +38,9 @@ live_router = APIRouter(prefix="/live", dependencies=[Depends(require_tuner_netw
 REUSE_SECONDS = 30
 HLS_TYPE = "application/vnd.apple.mpegurl"
 _recent: dict = {}
+# A manifest is a few hundred KB at most (cdnmedia's DVR chunklist: 290 KB).
+MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+MAX_REDIRECTS = 5
 
 
 def _resolve_once(stream_url: str):
@@ -43,16 +55,62 @@ def _resolve_once(stream_url: str):
     return link
 
 
+def _fetch_manifest(url: str, headers: dict):
+    """(final URL, body, content type), following redirects through the
+    guarded client: every hop's address is checked, these URLs come from
+    third-party playlists."""
+    for _ in range(MAX_REDIRECTS + 1):
+        response = source_get(url, timeout=20, headers=headers)
+        if response.status_code in (301, 302, 303, 307, 308) and response.headers.get('Location'):
+            url = urljoin(url, response.headers['Location'])
+            continue
+        response.raise_for_status()
+        return url, response.content[:MAX_MANIFEST_BYTES], response.headers.get('Content-Type') or ''
+    raise ValueError('too many redirects')
+
+
+def _serve_manifest(stream_id: str, url: str, headers: dict):
+    try:
+        final_url, body, content_type = _fetch_manifest(url, headers)
+    except Exception as error:
+        return JSONResponse({"detail": f"The origin did not return the manifest: {error}"}, status_code=502)
+    text = body.decode('utf-8', 'replace')
+    if '#EXTM3U' not in text[:512]:
+        # Not a manifest -- an origin that answers with the video itself.
+        # Hand it over instead of buffering video here.
+        return RedirectResponse(final_url, status_code=302)
+
+    def link(absolute_url: str) -> str:
+        return (f"/live/{quote(stream_id, safe='')}?u={quote(absolute_url, safe='')}"
+                f"&s={hls_manifest.sign(absolute_url)}")
+
+    served = hls_manifest.serve(text, final_url, link)
+    # A plain body, so a Content-Length and never chunked: served this way
+    # ffmpeg reads it whole.
+    return Response(content=served.encode('utf-8'), media_type=HLS_TYPE)
+
+
 @live_router.api_route("/{stream_id}", methods=["GET", "HEAD"], include_in_schema=False)
 async def open_live_stream(stream_id: str, request: Request, db: Session = Depends(get_db)):
     stream = db.get(AcestreamChannel, stream_id)
     stream_url = getattr(stream, "stream_url", None)
+    stream_headers = dict(getattr(stream, "stream_headers", None) or {})
     # Released now, not after the response: resolving takes up to three
     # requests to the broadcaster and must not hold a pooled connection
     # meanwhile (see tuner._engine).
     db.close()
     # Errors are answered as JSON here: a 404 raised as an exception would
     # reach the SPA fallback and come back as index.html with HTTP 200.
+    if hls_manifest.needs_manifest(stream_url, stream_headers):
+        if request.method == "HEAD":
+            return Response(status_code=200, media_type=HLS_TYPE)
+        # A variant or nested manifest: only a URL we signed when rewriting
+        # its master, never one a caller makes up.
+        nested = request.query_params.get("u")
+        if nested is not None:
+            if not hls_manifest.is_signed(nested, request.query_params.get("s", "")):
+                return JSONResponse({"detail": "Unsigned manifest URL"}, status_code=403)
+        return await run_in_threadpool(_serve_manifest, stream_id, nested or stream_url, stream_headers)
     if live_providers.for_stream_url(stream_url) is None:
         return JSONResponse({"detail": "Not a live channel"}, status_code=404)
     if request.method == "HEAD":

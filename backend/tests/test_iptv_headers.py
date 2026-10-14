@@ -95,7 +95,9 @@ def test_LA_LISTA_LAS_PUBLICA(client, db_session):
     db_session.commit()
     r = client.get("/playlist.m3u", params={"only_online": "false"})
     assert r.status_code == 200, r.text
-    assert URL + "|Referer=https%3A%2F%2Fplayer.instantvideocloud.net%2F" in r.text, r.text
+    # Through our manifest route (see test_hls_manifest), still carrying the
+    # header: the segments go straight to the CDN and need it.
+    assert ("/live/url%3A" + "b" * 40 + "|Referer=https%3A%2F%2Fplayer.instantvideocloud.net%2F") in r.text, r.text
 
 
 # A stream without headers stored the JSON text 'null', which SQL counts as

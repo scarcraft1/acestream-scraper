@@ -135,3 +135,27 @@ def test_LA_MIGRACION_LIMPIA_LOS_NULL_DE_TEXTO(tmp_path):
         assert rows == {'a': None, 'b': '{"Referer": "https://x/"}'}
     finally:
         engine.dispose()
+
+
+# The default playlist (only_online=true) had no HTTP channel at all: the
+# status check skips every stream_url, so they stay unknown forever. Measured
+# on the fork: 0 entries with only_online=true, 592 without it.
+
+def test_LA_LISTA_POR_DEFECTO_LLEVA_LAS_HTTP_SIN_COMPROBAR(client, db_session):
+    ace_unknown = "a" * 40
+    db_session.add_all([
+        AcestreamChannel(id="url:" + "c" * 40, name="HTTP sin comprobar", is_active=True,
+                         is_online=None, stream_url="https://cdn.example.com/x.m3u8"),
+        AcestreamChannel(id="url:" + "d" * 40, name="HTTP caida", is_active=True,
+                         is_online=False, stream_url="https://cdn.example.com/y.m3u8"),
+        AcestreamChannel(id=ace_unknown, name="Ace sin comprobar", is_active=True, is_online=None),
+        AcestreamChannel(id="e" * 40, name="Ace viva", is_active=True, is_online=True),
+    ])
+    db_session.commit()
+    body = client.get("/playlist.m3u").text  # only_online defaults to true
+    assert "HTTP sin comprobar" in body
+    assert "Ace viva" in body
+    # What only_online meant still holds for everything that WAS checked,
+    # and for acestream ids, which wait on the engine.
+    assert "HTTP caida" not in body
+    assert "Ace sin comprobar" not in body

@@ -2,7 +2,7 @@
 Repository for channel data operations
 """
 from app.config.database_retry import retry_database_write
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from typing import Dict, Any, Iterable, List, Optional
 from datetime import datetime, timezone
@@ -237,7 +237,16 @@ class ChannelRepository:
             query = query.filter(AcestreamChannel.group == group)
 
         if only_online:
-            query = query.filter(AcestreamChannel.is_online == True)
+            # An HTTP stream is never checked (the status check skips any
+            # stream_url), so it stays unknown forever and the default
+            # playlist, only_online=true, had NO HTTP channel at all. Unknown
+            # HTTP streams are published: a dead one fails in Kodi within
+            # seconds and leaves the remote responsive, which is not true of
+            # an acestream id waiting on the engine.
+            query = query.filter(or_(
+                AcestreamChannel.is_online == True,
+                and_(AcestreamChannel.stream_url.isnot(None), AcestreamChannel.is_online.is_(None)),
+            ))
 
         if include_groups and len(include_groups) > 0:
             query = query.filter(AcestreamChannel.group.in_(include_groups))

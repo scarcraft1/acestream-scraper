@@ -181,7 +181,7 @@ class PlaylistService:
             if channel.logo:
                 attrs.append(f'tvg-logo="{self._attr(channel.logo)}"')
             attrs.append(f'group-title="{self._attr(channel.group or "Unassigned Streams")}"')
-            lines.extend([f'#EXTINF:-1 {" ".join(attrs)},{name}', self._stream_link(base_url, channel.id, pid_counter if addpid else None)])
+            lines.extend([f'#EXTINF:-1 {" ".join(attrs)},{name}', self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None))])
             if addpid:
                 pid_counter += 1
         return lines
@@ -247,7 +247,7 @@ class PlaylistService:
                     attrs.append(f'group-title="{self._attr(tv_channel.category)}"')
 
                 lines.append(f'#EXTINF:-1 {" ".join(attrs)},{display_name}')
-                lines.append(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id))
+                lines.append(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None)))
                 if addpid:
                     pid_counter += 1
 
@@ -304,14 +304,22 @@ class PlaylistService:
         return m3u_attr(value)
 
     @staticmethod
-    def _stream_link(base_url: str, channel_id: str, pid: Optional[int] = None, *, tv_channel_id: Optional[int] = None) -> str:
+    def _stream_link(base_url: str, channel_id: str, pid: Optional[int] = None, *, tv_channel_id: Optional[int] = None, stream_url: Optional[str] = None) -> str:
         """Build a stream link from a base-URL pattern (#62).
 
         A pattern containing {channel_id} is rendered by substitution
         (with {pid} filled from the per-entry counter, or stripped when
         pids are disabled); a pattern without placeholders is a plain
         prefix, matching the legacy base_url behavior.
+
+        A stream that carries its own `stream_url` -- an IPTV entry that is
+        not an acestream id -- is emitted as that URL, untouched. Every base
+        URL pattern assumes an engine that resolves an acestream id; applied
+        here it would produce `...getstream?id=url:<sha1>`, which no engine
+        can play.
         """
+        if stream_url:
+            return stream_url
         if "{tv_channel_id}" in base_url:
             if tv_channel_id is None:
                 raise ValueError("This relay format requires a TV channel assignment")
@@ -433,7 +441,7 @@ class PlaylistService:
             # Generate entry
             entry = f'#EXTINF:-1 {" ".join(attrs)}, {channel.name}\n'
 
-            link = self._stream_link(base_url, channel.id, pid_counter if addpid else None)
+            link = self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None))
             entry += link + '\n'
 
             entries.append(entry)

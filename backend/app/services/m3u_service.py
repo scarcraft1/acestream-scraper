@@ -81,7 +81,12 @@ class M3UService:
         them through would turn junk lines into channels.
         """
         low = line.strip().lower()
-        return low.startswith('http://') or low.startswith('https://')
+        if low.startswith('http://') or low.startswith('https://'):
+            return True
+        # A broadcaster's channel (`mediaset://T5`): resolved when opened,
+        # see app.services.live_providers.
+        from app.services.live_providers import for_stream_url
+        return for_stream_url(line.strip()) is not None
 
     @staticmethod
     def _stream_id(url: str) -> str:

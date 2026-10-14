@@ -2,7 +2,7 @@
 Service for managing and generating M3U playlists
 """
 import re
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -17,9 +17,14 @@ from app.utils.m3u import m3u_attr
 class PlaylistService:
     """Service for generating M3U playlists"""
 
-    def __init__(self, db: Session):
-        """Initialize with database session"""
+    def __init__(self, db: Session, live_base_url: Optional[str] = None):
+        """Initialize with database session.
+
+        live_base_url is the server's public address, where players open a
+        broadcaster's live channel (/live/...).
+        """
         self.db = db
+        self.live_base_url = live_base_url
         self.channel_repository = ChannelRepository(db)
 
     def guide_coverage(self):
@@ -181,7 +186,7 @@ class PlaylistService:
             if channel.logo:
                 attrs.append(f'tvg-logo="{self._attr(channel.logo)}"')
             attrs.append(f'group-title="{self._attr(channel.group or "Unassigned Streams")}"')
-            lines.extend([f'#EXTINF:-1 {" ".join(attrs)},{name}', self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None))])
+            lines.extend([f'#EXTINF:-1 {" ".join(attrs)},{name}', self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None), live_base_url=self.live_base_url)])
             if addpid:
                 pid_counter += 1
         return lines
@@ -247,7 +252,7 @@ class PlaylistService:
                     attrs.append(f'group-title="{self._attr(tv_channel.category)}"')
 
                 lines.append(f'#EXTINF:-1 {" ".join(attrs)},{display_name}')
-                lines.append(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None)))
+                lines.append(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None), live_base_url=self.live_base_url))
                 if addpid:
                     pid_counter += 1
 
@@ -318,7 +323,7 @@ class PlaylistService:
         return self.epg_ids.resolve(None, stream_tvg_id)
 
     @staticmethod
-    def _stream_link(base_url: str, channel_id: str, pid: Optional[int] = None, *, tv_channel_id: Optional[int] = None, stream_url: Optional[str] = None, stream_headers: Optional[dict] = None) -> str:
+    def _stream_link(base_url: str, channel_id: str, pid: Optional[int] = None, *, tv_channel_id: Optional[int] = None, stream_url: Optional[str] = None, stream_headers: Optional[dict] = None, live_base_url: Optional[str] = None) -> str:
         """Build a stream link from a base-URL pattern (#62).
 
         A pattern containing {channel_id} is rendered by substitution
@@ -333,6 +338,13 @@ class PlaylistService:
         can play.
         """
         if stream_url:
+            from app.services import live_providers
+            if live_providers.for_stream_url(stream_url) is not None:
+                # Its link expires: point the player at the route that signs
+                # a new one when the channel is opened.
+                if not live_base_url:
+                    raise ValueError("A live channel needs the server's public address")
+                stream_url = f"{live_base_url.rstrip('/')}{live_providers.LIVE_PATH}{quote(str(channel_id), safe='')}"
             return PlaylistService._with_headers(stream_url, stream_headers)
         if "{tv_channel_id}" in base_url:
             if tv_channel_id is None:
@@ -473,7 +485,7 @@ class PlaylistService:
             # Generate entry
             entry = f'#EXTINF:-1 {" ".join(attrs)}, {channel.name}\n'
 
-            link = self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None))
+            link = self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None), live_base_url=self.live_base_url)
             entry += link + '\n'
 
             entries.append(entry)

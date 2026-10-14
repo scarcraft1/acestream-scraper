@@ -82,3 +82,60 @@ def test_LA_RUTA_DEL_RELE_PASA_LOS_AJUSTES(db_session, monkeypatch):
     source = inspect.getsource(tuner)
     assert 'attempt_seconds=relay_settings.source_start_seconds' in source
     assert 'startup_budget_seconds=relay_settings.startup_budget_seconds' in source
+
+
+def _source_that(dies_after_chunks, tag):
+    """A source that sends some chunks and then stops sending (a stall)."""
+    async def relay(_engine, content_id, _label, **kwargs):
+        for i in range(dies_after_chunks):
+            yield f'{tag}{i}'.encode()
+        await asyncio.sleep(10)
+    return relay
+
+
+@pytest.mark.asyncio
+async def test_SI_LA_FUENTE_SE_SECA_EN_PLENA_EMISION_SIGUE_CON_OTRA(monkeypatch):
+    """Óscar, 14-10: better a switch than the channel stopping."""
+    import app.services.tuner_playback_service as playback
+    calls = []
+
+    async def relay(_engine, content_id, _label, **kwargs):
+        calls.append(content_id)
+        yield f'{content_id}-a'.encode()
+        if content_id == 'first':
+            await asyncio.sleep(10)        # stalls after its first chunk
+        yield f'{content_id}-b'.encode()
+    monkeypatch.setattr(playback, 'relay_engine_stream', relay)
+    monkeypatch.setattr(playback, 'STALL_SECONDS', 0.05)
+    registry = RelayRegistry()
+    claim = registry.try_open('first', 'viewer', 1)
+    received = []
+    from app.services.stream_relay import EngineStreamError
+    with pytest.raises(EngineStreamError):   # once every source is spent
+        async for chunk in relay_ranked_streams(Mock(), ['first', 'second'], 'viewer', claim, registry=registry,
+                                                attempt_seconds=1, startup_budget_seconds=2, switch_midstream=True):
+            received.append(chunk)
+    assert received == [b'first-a', b'second-a', b'second-b']
+    assert calls == ['first', 'second']
+
+
+@pytest.mark.asyncio
+async def test_SIN_EL_AJUSTE_SE_CORTA_COMO_ANTES(monkeypatch):
+    import app.services.tuner_playback_service as playback
+
+    async def relay(_engine, content_id, _label, **kwargs):
+        yield f'{content_id}-a'.encode()
+        await asyncio.sleep(10)
+    monkeypatch.setattr(playback, 'relay_engine_stream', relay)
+    monkeypatch.setattr(playback, 'STALL_SECONDS', 0.05)
+    registry = RelayRegistry()
+    claim = registry.try_open('first', 'viewer', 1)
+    received = [chunk async for chunk in relay_ranked_streams(Mock(), ['first', 'second'], 'viewer', claim,
+                                                              registry=registry, attempt_seconds=1, startup_budget_seconds=2)]
+    assert received == [b'first-a']
+
+
+def test_LA_RUTA_PASA_EL_AJUSTE_DE_SALTAR():
+    import inspect
+    from app.api.endpoints import tuner
+    assert 'switch_midstream=await run_in_threadpool(_switch_on_failure)' in inspect.getsource(tuner)

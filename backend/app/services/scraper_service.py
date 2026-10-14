@@ -97,6 +97,9 @@ class ScraperService:
                     # association into the INSERT; existing rows are assigned
                     # by the repository's conflict-checked UPDATE above.
                     tv_channel_id=metadata.get('tv_channel_id'),
+                    # Set only for streams addressed by URL instead of by an
+                    # acestream id. See M3UService._looks_like_stream.
+                    stream_url=metadata.get('stream_url'),
                     # Catalogue presence is not evidence of a live signal.
                     is_online=None,
                     commit=False,

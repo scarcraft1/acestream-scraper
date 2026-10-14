@@ -293,6 +293,7 @@ class ChannelRepository:
                                tvg_name: Optional[str] = None,
                                tv_channel_id: Optional[int] = None,
                                is_online: Optional[bool] = None,
+                               stream_url: Optional[str] = None,
                                commit: bool = True) -> AcestreamChannel:
         """Create a new channel or update existing one. Always update tvg_id and tvg_name if present (even if empty string)."""
         channel = self.get_channel_by_id(channel_id)
@@ -309,13 +310,19 @@ class ChannelRepository:
                 tv_channel_id=tv_channel_id,
                 last_seen=datetime.now(timezone.utc),
                 is_active=True,
-                is_online=is_online
+                is_online=is_online,
+                stream_url=stream_url or None
             )
             self.db.add(channel)
         else:
             # Update existing channel
             channel.name = name
             channel.last_seen = datetime.now(timezone.utc)
+            # Only ever set it, never clear it: a later scrape that does not
+            # carry the URL must not turn a working IPTV stream into an id
+            # the engine will be asked about.
+            if stream_url:
+                channel.stream_url = stream_url
             # is_active is the user's "show in playlist" choice; a scrape never overrides it.
             if source_url is not None:
                 channel.source_url = source_url

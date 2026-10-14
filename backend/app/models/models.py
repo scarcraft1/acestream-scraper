@@ -126,6 +126,15 @@ class AcestreamChannel(Base):
     bitrate_checked_at = Column(UtcDateTime(), nullable=True)
     stream_stats = Column(JSON, nullable=True)
     original_url = Column(String(2048), nullable=True)
+    # The direct URL when this stream is not an acestream id at all: an
+    # HLS/IPTV playlist served over HTTP. NULL for acestream streams, which
+    # are addressed by `id` through the engine.
+    #
+    # Why a column and not a convention on `id`: the id stays opaque and
+    # stable, and every existing check that asks the engine about a 40 hex
+    # id keeps working untouched -- a stream with `stream_url` set simply
+    # has an id that no engine pattern matches.
+    stream_url = Column(String(2048), nullable=True)
     epg_update_protected = Column(Boolean, default=False)
 
     # Relationship with TVChannel

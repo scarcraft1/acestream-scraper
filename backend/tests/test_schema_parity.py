@@ -104,6 +104,7 @@ def test_acestream_channels_schema_includes_runtime_last_seen(tmp_path):
             'is_online',
             'network_status',
             'id_kind',
+            'stream_url',
             'last_checked',
             'check_error',
             'bitrate_bps',

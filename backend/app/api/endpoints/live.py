@@ -45,7 +45,10 @@ _recent: dict = {}
 # dead for 20 s and a surprise dialog a minute later. Past the budget the
 # player gets a 502 at once, which it handles cleanly (dialog in 2 s, remote
 # responsive). Mediaset's slowest measured resolution was about 6 s.
-OPEN_BUDGET_SECONDS = 8
+# Raised from 8 to 15 s at Óscar's request: with the playlist's mimetype the
+# budget no longer blocks the remote (measured 0 s), it only delays the error,
+# so a slow broadcaster gets more room.
+OPEN_BUDGET_SECONDS = 15
 # A manifest is a few hundred KB at most (cdnmedia's DVR chunklist: 290 KB).
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_REDIRECTS = 5

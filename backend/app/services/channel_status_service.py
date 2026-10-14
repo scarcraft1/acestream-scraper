@@ -175,6 +175,16 @@ class ChannelStatusService:
         self, channel: AcestreamChannel, *, identifier: str = 'id', persist: bool = True,
         priority: ProbePriority = ProbePriority.MANUAL, scan_started_at: Optional[datetime] = None,
     ) -> Dict[str, Any]:
+        if getattr(channel, 'stream_url', None):
+            # An IPTV stream addressed by URL, not an acestream id. The engine
+            # cannot resolve `url:<sha1>`: asked, it would report the stream
+            # missing and mark it offline, and the whole IPTV half of the
+            # catalogue would read as dead. Previous status is kept instead.
+            # Checking these properly is an HTTP request to the playlist, not
+            # an engine session, and is not done here.
+            result = self._skipped_result(channel)
+            result['message'] = 'IPTV stream addressed by URL; not checked through the acestream engine.'
+            return result
         if not self._get_engine_url():
             result = self._skipped_result(channel)
             result['message'] = 'No engine configured; stream status checks are disabled.'

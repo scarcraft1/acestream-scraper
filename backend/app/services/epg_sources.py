@@ -207,6 +207,13 @@ class EPGSourceOperations:
                 import gzip
                 content = gzip.decompress(content)
 
+            # A football fixtures page is not XMLTV: it says which channel
+            # airs each match, which no general guide does. It is converted
+            # here and then follows the same path as any other source.
+            from app.services.football_agenda import html_to_xmltv, is_agenda_url
+            if is_agenda_url(source.url):
+                content = html_to_xmltv(content)
+
             # Use the improved _process_epg_xml method
             channels_found, programs_found = self._process_epg_xml(source.id, content)
 

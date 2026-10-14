@@ -6360,6 +6360,18 @@
             "title": "Only Online",
             "type": "boolean"
           },
+          "source_start_seconds": {
+            "default": 30,
+            "description": "Seconds a source gets to deliver its first byte before the next is tried",
+            "title": "Source Start Seconds",
+            "type": "integer"
+          },
+          "startup_budget_seconds": {
+            "default": 55,
+            "description": "Seconds for the whole start across sources; keep it under the player's timeout (Kodi: 60)",
+            "title": "Startup Budget Seconds",
+            "type": "integer"
+          },
           "tuner_count": {
             "title": "Tuner Count",
             "type": "integer"
@@ -6422,6 +6434,32 @@
               }
             ],
             "title": "Only Online"
+          },
+          "source_start_seconds": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Start Seconds"
+          },
+          "startup_budget_seconds": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startup Budget Seconds"
           },
           "tuner_count": {
             "anyOf": [

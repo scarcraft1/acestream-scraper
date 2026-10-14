@@ -357,3 +357,34 @@ def test_UNA_CADENA_COLGADA_NO_DEJA_A_KODI_ESPERANDO(lan, client, db_session, mo
     response = client.get(f'/live/{stream.id}', follow_redirects=False)
     assert response.status_code == 502
     assert clock.monotonic() - started < 1.5
+
+
+def test_CADA_ENLACE_LIVE_LLEVA_SU_MIMETYPE_Y_LO_DIRECTO_NO(client, db_session):
+    """Without it IPTV Simple opens the link in Kodi's interface thread to
+    learn its type: 16 s of dead remote against a hung broadcaster, even
+    with the budget. With it, 0 s (kodi-53, fake provider)."""
+    db_session.add_all([_stream('mediaset://T5'), _stream('https://cdn.example.com/directo.m3u8')])
+    db_session.commit()
+    lines = client.get('/playlist.m3u?only_online=false').text.splitlines()
+    live = [i for i, line in enumerate(lines) if '/live/' in line and not line.startswith('#')]
+    direct = lines.index('https://cdn.example.com/directo.m3u8')
+    assert len(live) == 1
+    assert lines[live[0] - 1] == '#KODIPROP:mimetype=application/vnd.apple.mpegurl'
+    # A direct link may be MPEG-TS or anything else: no type is guessed for it.
+    assert not lines[direct - 1].startswith('#KODIPROP')
+
+
+@pytest.mark.parametrize('path', ['/api/v1/playlists/tv-channels/m3u', '/api/v1/playlists/all-streams/m3u'])
+def test_EL_MIMETYPE_TAMBIEN_EN_LAS_OTRAS_LISTAS(client, db_session, path):
+    from app.models.models import TVChannel
+    tv = TVChannel(name='Telecinco', is_active=True)
+    db_session.add(tv)
+    db_session.flush()
+    stream = _stream('mediaset://T5')
+    stream.tv_channel_id = tv.id
+    db_session.add_all([stream, _stream('telemadrid://ref:Live_LaOtra')])
+    db_session.commit()
+    lines = client.get(path).text.splitlines()
+    live = [i for i, line in enumerate(lines) if '/live/' in line and not line.startswith('#')]
+    assert live
+    assert all(lines[i - 1] == '#KODIPROP:mimetype=application/vnd.apple.mpegurl' for i in live)

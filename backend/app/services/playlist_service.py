@@ -14,6 +14,9 @@ from app.services.stream_ranking import score_acestream, sort_streams_curated
 from app.utils.m3u import m3u_attr
 
 
+LIVE_MIMETYPE_PROP = '#KODIPROP:mimetype=application/vnd.apple.mpegurl'
+
+
 class PlaylistService:
     """Service for generating M3U playlists"""
 
@@ -186,7 +189,8 @@ class PlaylistService:
             if channel.logo:
                 attrs.append(f'tvg-logo="{self._attr(channel.logo)}"')
             attrs.append(f'group-title="{self._attr(channel.group or "Unassigned Streams")}"')
-            lines.extend([f'#EXTINF:-1 {" ".join(attrs)},{name}', self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None), live_base_url=self.live_base_url)])
+            lines.append(f'#EXTINF:-1 {" ".join(attrs)},{name}')
+            lines.extend(self._link_lines(self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None), live_base_url=self.live_base_url)))
             if addpid:
                 pid_counter += 1
         return lines
@@ -252,7 +256,7 @@ class PlaylistService:
                     attrs.append(f'group-title="{self._attr(tv_channel.category)}"')
 
                 lines.append(f'#EXTINF:-1 {" ".join(attrs)},{display_name}')
-                lines.append(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None), live_base_url=self.live_base_url))
+                lines.extend(self._link_lines(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None), live_base_url=self.live_base_url)))
                 if addpid:
                     pid_counter += 1
 
@@ -321,6 +325,22 @@ class PlaylistService:
         if getattr(tv_channel, 'agenda_epg_id', None):
             return tv_channel.agenda_epg_id
         return self.epg_ids.resolve(None, stream_tvg_id)
+
+    def _link_lines(self, link: str) -> List[str]:
+        """The lines that open a stream: its link, preceded by the mimetype
+        when it goes through /live/.
+
+        Without it IPTV Simple finds out the type by opening the link in
+        Kodi's INTERFACE thread, twice. Against a broadcaster that does not
+        answer, that left the remote dead for 16 s even with the 8 s budget
+        on /live/; with the mimetype, 0 s (measured by kodi-53 with a hung
+        fake provider). Everything behind /live/ is HLS. Direct links to
+        other CDNs may be MPEG-TS or anything else, so they are left alone.
+        """
+        from app.services import live_providers
+        if self.live_base_url and link.startswith(f"{self.live_base_url.rstrip('/')}{live_providers.LIVE_PATH}"):
+            return [LIVE_MIMETYPE_PROP, link]
+        return [link]
 
     @staticmethod
     def _stream_link(base_url: str, channel_id: str, pid: Optional[int] = None, *, tv_channel_id: Optional[int] = None, stream_url: Optional[str] = None, stream_headers: Optional[dict] = None, live_base_url: Optional[str] = None) -> str:
@@ -491,7 +511,7 @@ class PlaylistService:
             entry = f'#EXTINF:-1 {" ".join(attrs)}, {channel.name}\n'
 
             link = self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None), live_base_url=self.live_base_url)
-            entry += link + '\n'
+            entry += ''.join(line + '\n' for line in self._link_lines(link))
 
             entries.append(entry)
             if addpid:

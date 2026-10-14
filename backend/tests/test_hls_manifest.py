@@ -329,3 +329,14 @@ def test_UN_IPTV_SIN_CABECERAS_NO_PASA_POR_AQUI(lan, client, db_session, origin)
     stream = _add(db_session, url='https://cdn.example/libre.m3u8', headers=None)
     assert client.get(f'/live/{stream.id}').status_code == 404
     assert asked == []
+
+
+def test_UN_ORIGEN_COLGADO_TAMBIEN_TIENE_TOPE(lan, client, db_session, monkeypatch):
+    import time as clock
+    from app.api.endpoints import live
+    stream = _add(db_session)
+    monkeypatch.setattr(live, 'OPEN_BUDGET_SECONDS', 0.3)
+    monkeypatch.setattr(live, 'source_get', lambda url, timeout=None, headers=None: clock.sleep(2) or FakeResponse(body=b'#EXTM3U\n'))
+    started = clock.monotonic()
+    assert client.get(f'/live/{stream.id}').status_code == 502
+    assert clock.monotonic() - started < 1.5

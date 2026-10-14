@@ -339,3 +339,21 @@ def test_TELEMADRID_UNA_GRABACION_NO_PASA_POR_DIRECTO(fake):
     fake({telemadrid.PLAYER_JS: 'x={policyKey:"PK"}',
           'https://edge.api.brightcove.com/': _brightcove(duration=3600000)})
     assert live_providers.resolve('telemadrid://ref:Live_Telemadrid') is None
+
+
+def test_UNA_CADENA_COLGADA_NO_DEJA_A_KODI_ESPERANDO(lan, client, db_session, monkeypatch):
+    """Kodi waits on this GET in its interface thread. With a hung
+    broadcaster the remote went dead for 20 s; past the budget it must get
+    the 502 it handles cleanly."""
+    import time as clock
+    from app.api.endpoints import live
+    stream = _stream('mediaset://T5')
+    db_session.add(stream)
+    db_session.commit()
+    monkeypatch.setattr(live, '_recent', {})
+    monkeypatch.setattr(live, 'OPEN_BUDGET_SECONDS', 0.3)
+    monkeypatch.setattr(live_providers, 'resolve', lambda url: clock.sleep(2) or 'https://late/x.m3u8')
+    started = clock.monotonic()
+    response = client.get(f'/live/{stream.id}', follow_redirects=False)
+    assert response.status_code == 502
+    assert clock.monotonic() - started < 1.5

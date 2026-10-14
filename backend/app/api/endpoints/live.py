@@ -15,6 +15,7 @@ like the tuner routes.
 The playback headers travel in the playlist entry (`url|Referer=...`);
 Kodi keeps sending them after a redirect and to every segment.
 """
+import asyncio
 import time
 from urllib.parse import quote, urljoin
 
@@ -38,6 +39,13 @@ live_router = APIRouter(prefix="/live", dependencies=[Depends(require_tuner_netw
 REUSE_SECONDS = 30
 HLS_TYPE = "application/vnd.apple.mpegurl"
 _recent: dict = {}
+# Whole budget for answering one GET, resolution or manifest fetch included.
+# Kodi waits on this request in its interface thread: a broadcaster that
+# hangs (Mediaset down: three requests of up to 20 s each) left the remote
+# dead for 20 s and a surprise dialog a minute later. Past the budget the
+# player gets a 502 at once, which it handles cleanly (dialog in 2 s, remote
+# responsive). Mediaset's slowest measured resolution was about 6 s.
+OPEN_BUDGET_SECONDS = 8
 # A manifest is a few hundred KB at most (cdnmedia's DVR chunklist: 290 KB).
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_REDIRECTS = 5
@@ -110,7 +118,12 @@ async def open_live_stream(stream_id: str, request: Request, db: Session = Depen
         if nested is not None:
             if not hls_manifest.is_signed(nested, request.query_params.get("s", "")):
                 return JSONResponse({"detail": "Unsigned manifest URL"}, status_code=403)
-        return await run_in_threadpool(_serve_manifest, stream_id, nested or stream_url, stream_headers)
+        try:
+            return await asyncio.wait_for(
+                run_in_threadpool(_serve_manifest, stream_id, nested or stream_url, stream_headers),
+                OPEN_BUDGET_SECONDS)
+        except asyncio.TimeoutError:
+            return JSONResponse({"detail": "The origin did not answer in time"}, status_code=502)
     if live_providers.for_stream_url(stream_url) is None:
         return JSONResponse({"detail": "Not a live channel"}, status_code=404)
     if request.method == "HEAD":
@@ -121,7 +134,12 @@ async def open_live_stream(stream_id: str, request: Request, db: Session = Depen
         return Response(status_code=200, media_type=HLS_TYPE)
     # Resolving makes one to three requests to the broadcaster; never on the
     # event loop.
-    link = await run_in_threadpool(_resolve_once, stream_url)
+    try:
+        # The resolving thread may outlive the answer; its link is still
+        # kept for REUSE_SECONDS, so a retry right after can use it.
+        link = await asyncio.wait_for(run_in_threadpool(_resolve_once, stream_url), OPEN_BUDGET_SECONDS)
+    except asyncio.TimeoutError:
+        link = None
     if not link:
         return JSONResponse({"detail": "The broadcaster did not return a live link"}, status_code=502)
     return RedirectResponse(link, status_code=302)

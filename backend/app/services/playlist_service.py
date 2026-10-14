@@ -181,7 +181,7 @@ class PlaylistService:
             if channel.logo:
                 attrs.append(f'tvg-logo="{self._attr(channel.logo)}"')
             attrs.append(f'group-title="{self._attr(channel.group or "Unassigned Streams")}"')
-            lines.extend([f'#EXTINF:-1 {" ".join(attrs)},{name}', self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None))])
+            lines.extend([f'#EXTINF:-1 {" ".join(attrs)},{name}', self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None))])
             if addpid:
                 pid_counter += 1
         return lines
@@ -247,7 +247,7 @@ class PlaylistService:
                     attrs.append(f'group-title="{self._attr(tv_channel.category)}"')
 
                 lines.append(f'#EXTINF:-1 {" ".join(attrs)},{display_name}')
-                lines.append(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None)))
+                lines.append(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None)))
                 if addpid:
                     pid_counter += 1
 
@@ -304,7 +304,7 @@ class PlaylistService:
         return m3u_attr(value)
 
     @staticmethod
-    def _stream_link(base_url: str, channel_id: str, pid: Optional[int] = None, *, tv_channel_id: Optional[int] = None, stream_url: Optional[str] = None) -> str:
+    def _stream_link(base_url: str, channel_id: str, pid: Optional[int] = None, *, tv_channel_id: Optional[int] = None, stream_url: Optional[str] = None, stream_headers: Optional[dict] = None) -> str:
         """Build a stream link from a base-URL pattern (#62).
 
         A pattern containing {channel_id} is rendered by substitution
@@ -319,7 +319,7 @@ class PlaylistService:
         can play.
         """
         if stream_url:
-            return stream_url
+            return PlaylistService._with_headers(stream_url, stream_headers)
         if "{tv_channel_id}" in base_url:
             if tv_channel_id is None:
                 raise ValueError("This relay format requires a TV channel assignment")
@@ -345,6 +345,24 @@ class PlaylistService:
         if pid is not None:
             link += f"&pid={pid}"
         return link
+
+    # Kodi reads `url|Name=value&Name=value` and sends those headers itself,
+    # to the playlist AND to every segment it fetches from the CDN. The values
+    # must be percent-encoded: unescaped, Kodi cuts each one at its first
+    # space, and a 120-character User-Agent arrives as `Mozilla/5.0`.
+    _HEADER_ORDER = ("User-Agent", "Referer", "Origin")
+
+    @staticmethod
+    def _with_headers(url: str, headers: Optional[dict]) -> str:
+        if not headers:
+            return url
+        from urllib.parse import quote
+        parts = [f"{name}={quote(str(headers[name]), safe='')}"
+                 for name in PlaylistService._HEADER_ORDER if headers.get(name)]
+        if not parts:
+            return url
+        # A list may already carry some headers after its own `|`.
+        return url + ("&" if "|" in url else "|") + "&".join(parts)
 
     @staticmethod
     def _strip_pid_placeholder(link: str) -> str:
@@ -441,7 +459,7 @@ class PlaylistService:
             # Generate entry
             entry = f'#EXTINF:-1 {" ".join(attrs)}, {channel.name}\n'
 
-            link = self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None))
+            link = self._stream_link(base_url, channel.id, pid_counter if addpid else None, stream_url=getattr(channel, 'stream_url', None), stream_headers=getattr(channel, 'stream_headers', None))
             entry += link + '\n'
 
             entries.append(entry)

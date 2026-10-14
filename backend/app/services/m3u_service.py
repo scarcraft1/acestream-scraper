@@ -69,6 +69,9 @@ class M3UService:
             tv_channel_service=tv_channel_service,
         )
 
+    _VLCOPT = re.compile(r'^#EXTVLCOPT:\s*http-(referrer|user-agent|origin)\s*=\s*(.+)$', re.I)
+    _HEADER_NAMES = {'referrer': 'Referer', 'user-agent': 'User-Agent', 'origin': 'Origin'}
+
     @staticmethod
     def _looks_like_stream(line: str) -> bool:
         """A playable URL that is not an acestream id.
@@ -158,6 +161,16 @@ class M3UService:
                 ):
                     channel_info['tvg_logo'] = current_group_metadata['group_logo']
                 continue
+            # Headers the playlist publishes for THIS entry, between #EXTINF
+            # and its URL. Measured on a public TDT list: 30 of 576 entries
+            # carry http-referrer, and their domains were exactly the ones
+            # answering 403 -- the "blocked" channels were only missing the
+            # header the list itself was publishing.
+            vlcopt = self._VLCOPT.match(line)
+            if vlcopt:
+                channel_info.setdefault('stream_headers', {})[
+                    self._HEADER_NAMES[vlcopt.group(1).lower()]] = vlcopt.group(2).strip()
+                continue
             # Skip other comment lines
             if line.startswith('#'):
                 continue
@@ -191,6 +204,10 @@ class M3UService:
                 metadata = {k: v for k, v in channel_info.items() if k != 'name'}
                 if stream_url:
                     metadata['stream_url'] = stream_url
+                else:
+                    # Headers only mean something to an HTTP request; an
+                    # acestream id goes through the engine.
+                    metadata.pop('stream_headers', None)
                 channels.append((channel_id, name, metadata))
                 channel_info = {}
         logger.info(f"Extracted {len(channels)} channels from M3U content")

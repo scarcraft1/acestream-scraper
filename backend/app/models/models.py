@@ -135,6 +135,9 @@ class AcestreamChannel(Base):
     # id keeps working untouched -- a stream with `stream_url` set simply
     # has an id that no engine pattern matches.
     stream_url = Column(String(2048), nullable=True)
+    # HTTP headers the source playlist publishes for `stream_url`
+    # (User-Agent, Referer, Origin). Some CDNs answer 403 without them.
+    stream_headers = Column(JSON, nullable=True)
     epg_update_protected = Column(Boolean, default=False)
 
     # Relationship with TVChannel

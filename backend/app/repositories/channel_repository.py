@@ -294,6 +294,7 @@ class ChannelRepository:
                                tv_channel_id: Optional[int] = None,
                                is_online: Optional[bool] = None,
                                stream_url: Optional[str] = None,
+                               stream_headers: Optional[dict] = None,
                                commit: bool = True) -> AcestreamChannel:
         """Create a new channel or update existing one. Always update tvg_id and tvg_name if present (even if empty string)."""
         channel = self.get_channel_by_id(channel_id)
@@ -311,7 +312,8 @@ class ChannelRepository:
                 last_seen=datetime.now(timezone.utc),
                 is_active=True,
                 is_online=is_online,
-                stream_url=stream_url or None
+                stream_url=stream_url or None,
+                stream_headers=stream_headers or None
             )
             self.db.add(channel)
         else:
@@ -323,6 +325,9 @@ class ChannelRepository:
             # the engine will be asked about.
             if stream_url:
                 channel.stream_url = stream_url
+                # The list is the authority on its own headers: if it stops
+                # publishing them, stop sending them.
+                channel.stream_headers = stream_headers or None
             # is_active is the user's "show in playlist" choice; a scrape never overrides it.
             if source_url is not None:
                 channel.source_url = source_url

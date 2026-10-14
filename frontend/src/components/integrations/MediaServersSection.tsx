@@ -281,8 +281,8 @@ const toForm = (settings: TunerSettings): TunerFormState => ({
   max_channels: String(settings.max_channels),
   only_online: settings.only_online,
   experimental_transcoding: settings.experimental_transcoding ?? false,
-  source_start_seconds: String(settings.source_start_seconds ?? 30),
-  startup_budget_seconds: String(settings.startup_budget_seconds ?? 55),
+  source_start_seconds: String(settings.source_start_seconds ?? 20),
+  startup_budget_seconds: String(settings.startup_budget_seconds ?? 28),
 });
 
 /** Friendly name, stream cap and lineup size the tuner reports to Jellyfin and Plex. */
@@ -382,7 +382,7 @@ const TunerSettingsBlock: React.FC<{ notify: MediaServerNotify }> = ({ notify })
               onChange={(event) => setForm((prev) => (prev ? { ...prev, startup_budget_seconds: event.target.value } : prev))}
               inputProps={{ 'aria-label': 'Seconds to start a channel', min: START_SECONDS_RANGE.min, max: START_SECONDS_RANGE.max, step: 1 }}
               error={budgetError !== null}
-              helperText={budgetError ?? 'Total for all its sources. Keep it under the player timeout: 60 s in Kodi.'}
+              helperText={budgetError ?? 'Total for all its sources. Kodi gives up opening a channel after 30 s.'}
               fullWidth
             />
           </Stack>

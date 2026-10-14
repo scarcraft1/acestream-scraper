@@ -3650,13 +3650,13 @@ export interface components {
       /**
        * Source Start Seconds
        * @description Seconds a source gets to deliver its first byte before the next is tried
-       * @default 30
+       * @default 20
        */
       source_start_seconds?: number;
       /**
        * Startup Budget Seconds
-       * @description Seconds for the whole start across sources; keep it under the player's timeout (Kodi: 60)
-       * @default 55
+       * @description Seconds for the whole start across sources; keep it under the player's limit (Kodi gives up after 30)
+       * @default 28
        */
       startup_budget_seconds?: number;
       /** Tuner Count */

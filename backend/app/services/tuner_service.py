@@ -71,8 +71,8 @@ class TunerSettings:
     experimental_transcoding: bool = False
     # Seconds a source gets to deliver its first byte, and for the whole start
     # across sources. Settings because a slow box needs more than the bank.
-    source_start_seconds: int = 30
-    startup_budget_seconds: int = 55
+    source_start_seconds: int = 20
+    startup_budget_seconds: int = 28
 
 
 @dataclass

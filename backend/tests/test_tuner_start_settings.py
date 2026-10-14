@@ -21,10 +21,11 @@ def clean_failures(monkeypatch):
     monkeypatch.setattr('app.services.tuner_playback_service._failures', __import__('collections').OrderedDict())
 
 
-def test_POR_DEFECTO_30_Y_55(db_session):
-    """55 s keeps the whole start under Kodi's 60 s curl timeout."""
+def test_POR_DEFECTO_20_Y_28(db_session):
+    """Kodi gives up opening a channel after 30 s: the whole start fits in 28,
+    with room for a second source after one that fails quickly."""
     settings = TunerService(db_session).settings()
-    assert (settings.source_start_seconds, settings.startup_budget_seconds) == (30, 55)
+    assert (settings.source_start_seconds, settings.startup_budget_seconds) == (20, 28)
 
 
 def test_SE_GUARDAN_Y_SE_ACOTAN(db_session):
@@ -36,7 +37,7 @@ def test_SE_GUARDAN_Y_SE_ACOTAN(db_session):
 
 
 def test_LA_API_LOS_ENSENA_Y_LOS_CAMBIA(client):
-    assert client.get('/api/v1/tuner/settings').json()['source_start_seconds'] == 30
+    assert client.get('/api/v1/tuner/settings').json()['source_start_seconds'] == 20
     response = client.put('/api/v1/tuner/settings', json={'source_start_seconds': 35, 'startup_budget_seconds': 50})
     assert response.status_code == 200
     assert (response.json()['source_start_seconds'], response.json()['startup_budget_seconds']) == (35, 50)

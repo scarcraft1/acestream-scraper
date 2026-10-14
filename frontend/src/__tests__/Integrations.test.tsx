@@ -578,18 +578,18 @@ describe('Integrations page', () => {
     const perSource = within(section).getByRole('spinbutton', { name: 'Seconds per source' });
     const total = within(section).getByRole('spinbutton', { name: 'Seconds to start a channel' });
     const save = within(section).getByRole('button', { name: 'Save tuner settings' });
-    expect(perSource).toHaveValue(30);
-    expect(total).toHaveValue(55);
+    expect(perSource).toHaveValue(20);
+    expect(total).toHaveValue(28);
 
     fireEvent.change(perSource, { target: { value: '200' } });
     expect(within(section).getByText('Enter a whole number between 5 and 180.')).toBeInTheDocument();
     expect(save).toBeDisabled();
 
     fireEvent.change(perSource, { target: { value: '40' } });
-    fireEvent.change(total, { target: { value: '58' } });
+    fireEvent.change(total, { target: { value: '29' } });
     fireEvent.click(save);
     await waitFor(() => expect(mockUpdateTunerSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ source_start_seconds: 40, startup_budget_seconds: 58 })));
+      expect.objectContaining({ source_start_seconds: 40, startup_budget_seconds: 29 })));
   });
 
   it('requires explicitly enabling experimental transcoding recovery', async () => {

@@ -51,10 +51,13 @@ class SettingsRepository:
     DEFAULT_TUNER_MAX_CHANNELS = '450'
     DEFAULT_TUNER_ONLY_ONLINE = 'false'
     # A cold acestream start took 17.4 s on the box (an A55) against 15 s per
-    # source: those channels always failed cold. 55 s keeps the whole start
-    # under Kodi's 60 s curl timeout.
-    DEFAULT_TUNER_SOURCE_START_SECONDS = '30'
-    DEFAULT_TUNER_STARTUP_BUDGET_SECONDS = '55'
+    # source: those channels always failed cold. But Kodi gives up opening a
+    # channel 30 s after creating its demuxer, even with the relay already
+    # sending (measured by kodi-53): a whole start must fit in under 30 s, and
+    # 30 s for one source left no room for a second. 20 s lets a slow source
+    # start; 28 s leaves room for another after one that fails quickly.
+    DEFAULT_TUNER_SOURCE_START_SECONDS = '20'
+    DEFAULT_TUNER_STARTUP_BUDGET_SECONDS = '28'
 
     # Keys whose stored empty value means "not configured" rather than
     # "deliberately blank". Their DEFAULT_<KEY> comes from the environment, and

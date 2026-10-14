@@ -7,6 +7,7 @@ import logging
 import re
 import secrets
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Set
 
 from sqlalchemy import func
@@ -103,6 +104,20 @@ class Lineup:
     overflow: int = 0
 
 
+# A check older than this ranks a source after every fresher one when the
+# relay picks what to try first. The check runs hourly while the box is on.
+FRESH_CHECK_HOURS = 6
+
+
+def _checked_since(stream, since) -> bool:
+    checked = getattr(stream, "last_checked", None)
+    if checked is None:
+        return False
+    if checked.tzinfo is None:
+        checked = checked.replace(tzinfo=timezone.utc)
+    return checked >= since
+
+
 class TunerService:
     def __init__(self, db: Session):
         self.db = db
@@ -164,7 +179,12 @@ class TunerService:
     def stream_ids(self, tv_channel_id: int, *, online_only: bool = False) -> List[str]:
         streams = ChannelRepository(self.db).get_tuner_streams(tv_channel_id, online_only=online_only)
         valid = [stream for stream in streams if re.fullmatch(r"[0-9a-fA-F]{40}", stream.id)]
-        valid.sort(key=lambda stream: (-(stream.bitrate_bps or 0), stream.id))
+        # Recently checked first, then by bitrate. A box that is only on now
+        # and then keeps "online" from a session hours or days ago; the first
+        # source tried eats 20 of the 30 s Kodi gives an opening, so a stale
+        # one goes after every fresh one. It is not dropped: only tried later.
+        fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
+        valid.sort(key=lambda stream: (not _checked_since(stream, fresh_since), -(stream.bitrate_bps or 0), stream.id))
         return list(dict.fromkeys(stream.id.lower() for stream in valid))
 
     # --- lineup -------------------------------------------------------------

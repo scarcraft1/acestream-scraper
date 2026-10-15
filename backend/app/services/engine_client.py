@@ -211,6 +211,11 @@ class EngineClient:
             lease.released = True
             source.leases.discard(lease)
             if source.leases:
+                # Another client still plays this source: its session stays
+                # until then, and is stopped with the source's final stop.
+                # Dropped here, it was never stopped at all (Kodi's two GETs
+                # overlapping).
+                source.parked.append(session)
                 return
             if linger_seconds <= 0:
                 self._stop_direct(session)

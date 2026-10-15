@@ -397,6 +397,11 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             yield first
             async for chunk in iterator:
                 yield chunk
+        except (EngineStreamError, EngineUnavailableError, EngineRefusedError):
+            # Every source gave up once the response had started: the headers
+            # are sent, so it just ends. Raised, it became a 500 traceback in
+            # the log (bench, 15-10).
+            logger.info("TV relay for channel %s ended: no source left", tv_channel_id)
         finally:
             monitor.cancel()
             await asyncio.gather(monitor, return_exceptions=True)

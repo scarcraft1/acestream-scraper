@@ -227,6 +227,9 @@ async def lifespan(app: FastAPI):
             # A machine that is only on for a few hours never reaches a 6 h or
             # 24 h interval counted from startup. See catch_up_missed_runs.
             task_service.catch_up_missed_runs()
+            # channel_status opens the engine, so not at startup: a quarter of
+            # an hour later, and only if it is still overdue then.
+            task_service.catch_up_later("channel_status", delay_seconds=900)
             await player_service.start()
             await asyncio.to_thread(_schedule_deferred_migration)
             reaper = asyncio.create_task(reap_relays_forever())

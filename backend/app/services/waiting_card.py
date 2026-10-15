@@ -27,6 +27,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import AsyncIterator
 
+import anyio
+
 logger = logging.getLogger(__name__)
 
 CARD_PATH = Path(__file__).resolve().parent.parent / 'assets' / 'conectando.ts'
@@ -91,9 +93,14 @@ async def with_waiting_card(inner: AsyncIterator[bytes], card: bytes, *, after: 
                 sent = due
     finally:
         # The client left or the source failed: the relay inside closes too,
-        # so its engine session and tuner slot are released.
-        if not pending.done():
-            pending.cancel()
-            with contextlib.suppress(BaseException):
-                await pending
-        await inner.aclose()
+        # so its engine session and tuner slot are released. Shielded: the
+        # server cancels the response with an anyio scope, which cancels
+        # every await again, and this cleanup was itself cancelled before
+        # the relay closed -- on the box the engine kept downloading after
+        # Kodi left, with no stop (kodi-0c, 15-10).
+        with anyio.CancelScope(shield=True):
+            if not pending.done():
+                pending.cancel()
+                with contextlib.suppress(BaseException):
+                    await pending
+            await inner.aclose()

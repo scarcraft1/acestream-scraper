@@ -735,3 +735,24 @@ def assert_epg_program_response(response_data, expected_data):
     assert response_data["description"] == expected_data["description"]
     assert response_data["category"] == expected_data["category"]
     assert response_data["image_url"] == expected_data["image_url"]
+
+
+@pytest.fixture(autouse=True)
+def _relay_registry_left_clean():
+    """Every test leaves the relay registry as it found it.
+
+    A relay claim left open is «someone watching» for the status pass, which
+    then waits up to 10 minutes (channel_status_task.wait_while_watching): on
+    2026-10-15 one test's fake relay that never released its tuner slot made
+    other tests pause twice and the suite went from 8 to 29 minutes, red in the
+    wrong place. Closing it here stops the leak; failing names the culprit.
+    """
+    from app.services.stream_relay import relay_registry
+    before = {info.id for info in relay_registry.active()}
+    yield
+    left = [info for info in relay_registry.active() if info.id not in before]
+    for info in left:
+        relay_registry.close(info.id)
+    if left:
+        pytest.fail("test left %d relay claim(s) open: %s" % (
+            len(left), ", ".join(f"{i.content_id[:12] or '-'} ({i.client_label})" for i in left)))

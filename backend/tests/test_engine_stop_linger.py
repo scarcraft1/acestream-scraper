@@ -78,27 +78,42 @@ def test_SI_EL_SEGUNDO_ARRANQUE_FALLA_NO_QUEDA_SESION_VIVA(engine):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("ending", ["client_leaves", "source_stalls"])
+@pytest.mark.parametrize("ending", ["client_cancels", "client_closes", "source_stalls"])
 async def test_EL_RELE_SOLO_ESPERA_CUANDO_SE_VA_EL_CLIENTE(monkeypatch, ending):
+    """How Kodi really leaves: the server cancels the response task while the
+    engine reader is waiting for data, so the cancellation reaches the reader
+    BEFORE the relay (measured on the bench by the other agent: stop 18 ms
+    after Kodi's GET, no linger). The fake reader asks, like the real one,
+    only when it is cancelled or closed."""
     import app.services.tuner_playback_service as playback
     from app.services.stream_relay import EngineStreamError, RelayRegistry
     lingers = []
+    waiting = asyncio.Event()
 
     async def relay(_engine, content_id, _label, *, stop_linger, **kwargs):
         try:
             yield b"a"
+            waiting.set()
             await asyncio.sleep(10)
             yield b"b"
-        finally:
+        except (GeneratorExit, asyncio.CancelledError):
             lingers.append(stop_linger())
+            raise
     monkeypatch.setattr(playback, "relay_engine_stream", relay)
-    monkeypatch.setattr(playback, "STALL_SECONDS", 0.05)
+    monkeypatch.setattr(playback, "STALL_SECONDS", 0.05 if ending == "source_stalls" else 5)
     registry = RelayRegistry()
     claim = registry.try_open("one", "viewer", 1)
     iterator = playback.relay_ranked_streams(Mock(), ["one"], "viewer", claim, registry=registry,
                                              attempt_seconds=1, startup_budget_seconds=1)
     assert await anext(iterator) == b"a"
-    if ending == "client_leaves":
+    if ending == "client_cancels":
+        task = asyncio.ensure_future(anext(iterator))
+        await waiting.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert lingers == [playback.STOP_LINGER_SECONDS]
+    elif ending == "client_closes":
         await iterator.aclose()
         assert lingers == [playback.STOP_LINGER_SECONDS]
     else:
@@ -125,3 +140,22 @@ def test_EL_RELE_PASA_LA_GRACIA_AL_MOTOR(monkeypatch):
         await stream.aclose()
     anyio.run(main)
     engine.stop.assert_called_once_with(engine.start.return_value, linger_seconds=5.0)
+
+
+def test_UN_FIN_NORMAL_PARA_EN_EL_ACTO():
+    """The source ended (not cancelled): no linger, whatever the caller says."""
+    import anyio
+    from app.services.stream_relay import RelayRegistry, relay_engine_stream
+    engine = Mock()
+    engine.engine_url = "http://engine:6878"
+    engine.start.return_value = Mock(playback_url="http://engine:6878/ace/r/x/tok")
+
+    def factory(**kwargs):
+        return httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, content=b"ts")), **kwargs)
+
+    async def main():
+        stream = relay_engine_stream(engine, CID, "viewer", client_factory=factory, registry=RelayRegistry(),
+                                     stop_linger=lambda: 5.0)
+        assert [chunk async for chunk in stream] == [b"ts"]
+    anyio.run(main)
+    engine.stop.assert_called_once_with(engine.start.return_value)

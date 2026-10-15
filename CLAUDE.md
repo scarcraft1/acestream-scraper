@@ -187,7 +187,11 @@ leaves (the server cancels the response; the cancellation reaches the engine
 reader first), the final engine stop is deferred `STOP_LINGER_SECONDS` (5) so
 Kodi's second GET finds the source running; a start within it parks the old
 session, stopped with the source's final stop. The relay's own start/stall
-deadlines stop at once.
+deadlines stop at once. `services/waiting_card.py`: when no byte has come after
+`waiting_card_seconds` (tuner setting, default 20, 0 = off) the route sends a 60 s
+«Conectando…» card (`app/assets/conectando.ts`, H.264 + AAC silence, paced, never
+looped) and the start budget stretches to the card's length; the first real byte
+is spliced in raw. Óscar: as rarely as possible, never another channel's content.
 One reserved relay claim survives failed attempts; startup has per-attempt and total
 deadlines. By default failures after playback starts end the response; client
 reconnections prefer alternatives over sources that failed in the last 60 seconds. Each

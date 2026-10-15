@@ -166,12 +166,18 @@ def _is_loopback(request: Request) -> bool:
 async def _open_for_relay(stream_id: str, stream_url, stream_headers: dict, request: Request):
     if not _is_loopback(request):
         return JSONResponse({"detail": "Only the relay on this server"}, status_code=403)
+    provider = live_providers.for_stream_url(stream_url)
+    if provider is not None:
+        # The provider's current playback headers win over the ones stored
+        # at import: 7 TV La Rioja's changed (15-10) and the box still had
+        # only the old Referer.
+        stream_headers = {**stream_headers, **provider.PLAY_HEADERS}
     nested = request.query_params.get("u")
     if nested is not None:
         if not hls_manifest.is_signed(nested, request.query_params.get("s", "")):
             return JSONResponse({"detail": "Unsigned URL"}, status_code=403)
         url = nested
-    elif live_providers.for_stream_url(stream_url) is not None:
+    elif provider is not None:
         try:
             url = await asyncio.wait_for(run_in_threadpool(_resolve_once, stream_url), OPEN_BUDGET_SECONDS)
         except asyncio.TimeoutError:

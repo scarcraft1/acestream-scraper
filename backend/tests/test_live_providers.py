@@ -290,19 +290,56 @@ def test_MEDIASET_RECHAZADO_NO_SIGUE(fake):
     assert len(http.calls) == 2
 
 
-def test_7TV_SIN_CALIDADES_NO_DA_ENLACE(fake):
-    http = fake({'https://www.dailymotion.com/player/metadata/video/x8dhao1': {
-        'error': {'title': '7rioja ha limitado su acceso a Dailymotion'}}})
+def test_7TV_SIN_PERMISO_DE_INCRUSTAR_NO_DA_ENLACE(fake):
+    http = fake({'https://geo.dailymotion.com/videos/x8dhao1': {
+        'error': {'code': 'DM016', 'reason': 'embed_rules'}}})
     assert live_providers.resolve('7riojaplay://x8dhao1') is None
-    # The video is tied to the broadcaster's domain.
-    assert 'embedder=https%3A%2F%2Fwww.7riojaplay.tv%2F' in http.calls[0][1]
-    assert http.calls[0][2]['Referer'] == sietetv.WEB
+    # Asked the way the broadcaster's embedded player asks.
+    headers = http.calls[0][2]
+    assert headers['x-dm-geo-embedder'] == sietetv.WEB
+    assert (headers['x-dm-geo-player-id'], headers['x-dm-geo-publisher-id']) == ('x11h8c', 'x2mgfup')
 
 
 def test_7TV_DA_EL_MAESTRO(fake):
-    fake({'https://www.dailymotion.com/player/metadata/video/x8dhao1': {
-        'qualities': {'auto': [{'url': 'https://cdndirector/master.m3u8?sec=1'}]}}})
-    assert live_providers.resolve('7riojaplay://x8dhao1') == 'https://cdndirector/master.m3u8?sec=1'
+    fake({'https://geo.dailymotion.com/videos/x8dhao1': {
+        'stream': {'stream_type': 'live', 'url': 'https://cdndirector/live/x8dhao1.m3u8?sec=1'}}})
+    assert live_providers.resolve('7riojaplay://x8dhao1') == 'https://cdndirector/live/x8dhao1.m3u8?sec=1'
+
+
+def test_7TV_SE_REPRODUCE_COMO_UN_NAVEGADOR():
+    """Measured 15-10: without a browser User-Agent AND Sec-Fetch-Mode: cors
+    the manifest answers 403; with them, 200."""
+    assert sietetv.PLAY_HEADERS['Sec-Fetch-Mode'] == 'cors'
+    assert sietetv.PLAY_HEADERS['User-Agent'].startswith('Mozilla/5.0')
+
+
+def test_EL_RELE_USA_LAS_CABECERAS_DEL_PROVEEDOR_Y_NO_LAS_GUARDADAS(lan, client, db_session, monkeypatch):
+    """The box imported 7 TV with only the old Referer."""
+    from app.api.endpoints import live
+    stream = _stream('7riojaplay://x8dhao1', {'Referer': 'https://www.7riojaplay.tv/'})
+    db_session.add(stream)
+    db_session.commit()
+    monkeypatch.setattr(live, '_recent', {})
+    monkeypatch.setattr(live, '_relay_cache', __import__('collections').OrderedDict())
+    monkeypatch.setattr(live, '_is_loopback', lambda request: True)
+    monkeypatch.setattr(live_providers, 'resolve', lambda url: 'https://cdndirector/live/x.m3u8?sec=1')
+    asked = []
+
+    def fake_get(url, timeout=None, headers=None):
+        asked.append(dict(headers or {}))
+
+        class R:
+            status_code = 200
+            content = b'#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nv.m3u8\n'
+            headers = {}
+
+            def raise_for_status(self):
+                pass
+        return R()
+    monkeypatch.setattr(live, 'source_get', fake_get)
+    assert client.get(f'/live/{stream.id}?r=1').status_code == 200
+    assert asked[0]['Sec-Fetch-Mode'] == 'cors'
+    assert asked[0]['User-Agent'] == sietetv.PLAY_HEADERS['User-Agent']
 
 
 def _brightcove(duration=-1):

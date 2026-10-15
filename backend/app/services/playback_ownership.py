@@ -22,6 +22,10 @@ class SourceOwnership:
     # A final stop the TV relay deferred (EngineClient.stop linger_seconds);
     # a new start of the same source cancels it.
     pending_stop: Optional[Timer] = None
+    # Sessions whose deferred stop a new start cancelled. Stopped with the
+    # source's final stop, never before: a stop with any PID could end the
+    # session being watched. Kept so none is left running on the engine.
+    parked: list = field(default_factory=list)
 
 
 @dataclass(eq=False)

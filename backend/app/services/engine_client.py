@@ -155,17 +155,18 @@ class EngineClient:
         source = source_ownership(self.engine_url, content_id)
         with source.lock:
             # A stop deferred by the TV relay is cancelled: the engine is
-            # still running this source, and a stop with any PID ends it for
-            # every PID, including the one about to start.
+            # still running this source. Its session is parked and stopped
+            # with the source's final stop.
             deferred, source.pending_stop = source.pending_stop, None
             if deferred is not None:
                 deferred.cancel()
+                source.parked.append(deferred.args[1])
             lease = PlaybackLease(source)
             try:
                 session = self._start_direct(content_id, pid or new_pid(), lease)
             except BaseException:
-                if deferred is not None and not source.leases:
-                    _stop_now(deferred.args[1])
+                if not source.leases:
+                    _stop_parked(source)
                 raise
             source.leases.add(lease)
             return session
@@ -213,6 +214,7 @@ class EngineClient:
                 return
             if linger_seconds <= 0:
                 self._stop_direct(session)
+                _stop_parked(source)
                 return
             timer = Timer(linger_seconds, _deferred_stop, args=(source, session))
             timer.daemon = True
@@ -240,6 +242,13 @@ def _deferred_stop(source, session: EngineSession) -> None:
         if source.pending_stop is None or source.leases:
             return
         source.pending_stop = None
+        _stop_now(session)
+        _stop_parked(source)
+
+
+def _stop_parked(source) -> None:
+    parked, source.parked = source.parked, []
+    for session in parked:
         _stop_now(session)
 
 

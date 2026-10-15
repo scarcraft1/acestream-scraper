@@ -17,12 +17,14 @@ from app.services import engine_client as engine_module
 from app.services.engine_client import EngineClient, EngineRefusedError
 
 CID = "c" * 40
+stops = []
 
 
 @pytest.fixture
 def engine(monkeypatch):
     """An engine that records starts; stops are recorded wherever they come from."""
     log = []
+    stops.clear()
     stopped = threading.Event()
 
     def handler(request):
@@ -32,8 +34,9 @@ def engine(monkeypatch):
                 return httpx.Response(200, json={"response": None, "error": "refused"})
             return httpx.Response(200, json={"response": {
                 "playback_url": "http://engine:6878/ace/r/x/tok", "stat_url": "http://engine:6878/ace/stat/x/s",
-                "command_url": "http://engine:6878/ace/cmd/x/s", "is_live": 1}, "error": None})
+                "command_url": "http://engine:6878/ace/cmd/x/" + request.url.params["pid"], "is_live": 1}, "error": None})
         log.append(("stop", request.url.params.get("method")))
+        stops.append(str(request.url.copy_remove_param("method")))
         stopped.set()
         return httpx.Response(200, json={"response": "ok", "error": None})
 
@@ -59,13 +62,29 @@ def test_CON_GRACIA_SE_PARA_AL_CABO(engine):
     assert [kind for kind, _ in log] == ["start", "stop"]
 
 
-def test_EL_SEGUNDO_GET_CANCELA_LA_PARADA(engine):
+def test_EL_SEGUNDO_GET_CANCELA_LA_PARADA_Y_NO_DEJA_HUERFANA(engine):
+    """The first session is stopped too, with the final stop: the other
+    agent saw on the bench that its stop never came."""
     client, log, stopped, _ = engine
-    client.stop(client.start(CID), linger_seconds=0.1)
+    first = client.start(CID)
+    client.stop(first, linger_seconds=0.1)
     second = client.start(CID)
-    assert not stopped.wait(0.3)          # the deferred stop never fires
+    assert not stopped.wait(0.3)          # nothing stopped while the second plays
     client.stop(second)
-    assert [kind for kind, _ in log] == ["start", "start", "stop"]
+    assert [kind for kind, _ in log] == ["start", "start", "stop", "stop"]
+    assert stops == [second.command_url, first.command_url]
+
+
+def test_SI_LA_PARADA_FINAL_TAMBIEN_SE_APLAZA_CAEN_LAS_DOS(engine):
+    client, log, stopped, _ = engine
+    first = client.start(CID)
+    client.stop(first, linger_seconds=0.05)
+    second = client.start(CID)
+    client.stop(second, linger_seconds=0.05)
+    deadline = __import__('time').monotonic() + 2
+    while len(stops) < 2 and __import__('time').monotonic() < deadline:
+        stopped.wait(0.05)
+    assert stops == [second.command_url, first.command_url]
 
 
 def test_SI_EL_SEGUNDO_ARRANQUE_FALLA_NO_QUEDA_SESION_VIVA(engine):

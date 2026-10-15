@@ -301,6 +301,14 @@ def _channel_candidates(tv_channel_id: int, *, include_offline: bool = False) ->
         db.close()
 
 
+def _doubtful_candidates(tv_channel_id: int) -> set:
+    db = SessionLocal()
+    try:
+        return TunerService(db).relay_doubtful_ids(tv_channel_id)
+    finally:
+        db.close()
+
+
 @hdhr_router.head("/channel/{tv_channel_id}.ts", include_in_schema=False)
 @hdhr_router.get("/channel/{tv_channel_id}.ts", response_class=Response,
     summary="TV channel MPEG-TS with automatic source failover",
@@ -343,8 +351,14 @@ async def tuner_channel(tv_channel_id: int, request: Request):
         except Exception:
             logger.warning("Could not record the relay's verdict for %s", content_id)
 
+    # Which candidates were not seen online lately: they get a shorter
+    # start (DOUBTFUL_ATTEMPT_SECONDS). Refreshed with the candidates.
+    doubtful: set = set(await run_in_threadpool(_doubtful_candidates, tv_channel_id))
+
     async def refreshed_candidates() -> tuple[List[str], bool]:
         current = await run_in_threadpool(_channel_candidates, tv_channel_id)
+        doubtful.clear()
+        doubtful.update(await run_in_threadpool(_doubtful_candidates, tv_channel_id))
         return current, refresh is not None and not refresh.done()
 
     iterator = None
@@ -370,7 +384,8 @@ async def tuner_channel(tv_channel_id: int, request: Request):
                                       attempt_seconds=relay_settings.source_start_seconds,
                                       startup_budget_seconds=budget,
                                       switch_midstream=await run_in_threadpool(_switch_on_failure),
-                                      on_source_verdict=_source_verdict)
+                                      on_source_verdict=_source_verdict,
+                                      is_doubtful=doubtful.__contains__)
         if card_after > 0:
             # Also when a playing source goes silent and the relay looks for
             # another: the card instead of the last frame frozen on screen.

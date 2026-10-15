@@ -18,7 +18,13 @@ from app.services.http_relay import is_http_source, relay_http_stream
 
 STARTUP_BUDGET_SECONDS = 45.0
 ATTEMPT_SECONDS = 15.0
-STALL_SECONDS = 15.0
+# A healthy source can be silent for over 16 s: the engine hands over whole
+# pieces (~1.5 MB), so a low-bitrate source arrives in bursts. Measured on
+# the bench by the other agent (15-10): one at 97 kB/s had 19 gaps of 12 s or
+# more, the longest 16.4 s, and the relay cut it at 15 s; one at 458 kB/s,
+# never more than 4.6 s. The box cut a source the same way. 25 s is above
+# the longest gap seen; only two sources were measured.
+STALL_SECONDS = 25.0
 HEALTHY_SECONDS = 30.0
 # Kodi opens a channel with two GETs and closes the first one; the engine
 # session outlives a closed client this long, so the second GET finds the

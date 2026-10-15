@@ -213,3 +213,12 @@ async def test_DOS_FUENTES_QUE_SE_ATASCAN_NO_SE_TURNAN_SIN_FIN(monkeypatch):
                                                 attempt_seconds=1, startup_budget_seconds=60, switch_midstream=True):
                 pass
     assert calls == ['one', 'two']
+
+
+def test_EL_ATASCO_ESTA_POR_ENCIMA_DEL_HUECO_DE_UNA_FUENTE_SANA():
+    """Measured on the bench (kodi-0c, 15-10): a healthy acestream at 97 kB/s
+    was silent up to 16.4 s between engine pieces, and the relay cut it at
+    15 s. The card in mid-broadcast waits the same, so it never cuts in
+    between two pieces of a healthy source."""
+    import app.services.tuner_playback_service as playback
+    assert playback.STALL_SECONDS > 16.4 * 1.4

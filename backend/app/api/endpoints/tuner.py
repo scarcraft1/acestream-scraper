@@ -36,7 +36,7 @@ from app.services.tuner_service import TunerService
 from app.services.tuner_playback_service import relay_ranked_streams, prefer_recovered_sources
 from app.services.tuner_remux import ffmpeg_binary
 from app.services.tuner_probe_service import tuner_probe_service
-from app.services import waiting_card
+from app.services import tuner_playback_service, waiting_card
 
 logger = logging.getLogger(__name__)
 
@@ -387,11 +387,13 @@ async def tuner_channel(tv_channel_id: int, request: Request):
                                       on_source_verdict=_source_verdict,
                                       is_doubtful=doubtful.__contains__)
         if card_after > 0:
-            # Also when a playing source goes silent and the relay looks for
+            # Also when the relay gives a playing source up and looks for
             # another: the card instead of the last frame frozen on screen.
+            # Not before: a healthy low-bitrate source is silent for up to
+            # 16 s between pieces, and the card would cut in every time.
             iterator = waiting_card.with_waiting_card(iterator, await run_in_threadpool(waiting_card.load_card),
                                                       after=card_after,
-                                                      midstream_after=waiting_card.MIDSTREAM_AFTER_SECONDS)
+                                                      midstream_after=tuner_playback_service.STALL_SECONDS)
         first = await anext(iterator)
     except BaseException as exc:
         monitor.cancel()

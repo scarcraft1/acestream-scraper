@@ -177,6 +177,7 @@ async def relay_engine_stream(
     registry: Optional[RelayRegistry] = None,
     claim: Optional[RelayInfo] = None,
     release_claim: bool = True,
+    stop_linger: Optional[Callable[[], float]] = None,
 ) -> AsyncIterator[bytes]:
     """Yield MPEG-TS bytes for ``content_id``.
 
@@ -194,6 +195,9 @@ async def relay_engine_stream(
     across attempts and must close the claim itself. Without a claim the relay
     registers itself, likewise before the start, so a
     relay is on the books for as long as it holds an engine session.
+
+    ``stop_linger``, asked when the relay ends, defers the engine's final stop
+    by that many seconds (see EngineClient.stop).
     """
     registry = registry or relay_registry
     factory = client_factory or _default_client_factory
@@ -220,5 +224,9 @@ async def relay_engine_stream(
         if release_claim:
             registry.close(info.id)
         if session is not None:
+            linger = stop_linger() if stop_linger is not None else 0
             with anyio.CancelScope(shield=True):
-                await run_in_threadpool(engine.stop, session)
+                if linger > 0:
+                    await run_in_threadpool(lambda: engine.stop(session, linger_seconds=linger))
+                else:
+                    await run_in_threadpool(engine.stop, session)

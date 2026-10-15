@@ -19,6 +19,10 @@ STARTUP_BUDGET_SECONDS = 45.0
 ATTEMPT_SECONDS = 15.0
 STALL_SECONDS = 15.0
 HEALTHY_SECONDS = 30.0
+# Kodi opens a channel with two GETs and closes the first one; the engine
+# session outlives a closed client this long, so the second GET finds the
+# source still running instead of starting it cold (3.2 s on the box).
+STOP_LINGER_SECONDS = 5.0
 logger = logging.getLogger(__name__)
 
 # Short, bounded process-local memory prevents reconnects picking a known failure
@@ -72,6 +76,7 @@ async def relay_ranked_streams(
     attempted: set[str] = set()
     candidates = prefer_recovered_sources(content_ids)
     version = 0
+    client_left = False
     try:
         while time.monotonic() < deadline:
             candidates = prefer_recovered_sources(candidates)
@@ -94,7 +99,8 @@ async def relay_ranked_streams(
             attempted.add(content_id)
             registry.select_stream(claim.id, content_id)
             raw = relay_engine_stream(engine, content_id, client_label, registry=registry,
-                client_factory=client_factory, claim=claim, release_claim=False)
+                client_factory=client_factory, claim=claim, release_claim=False,
+                stop_linger=lambda: STOP_LINGER_SECONDS if client_left else 0)
             iterator = remux_source(raw, version=version, offset=time.monotonic() - started) if experimental_transcoding else raw
             version += 1
             first_at = last_at = None
@@ -144,6 +150,10 @@ async def relay_ranked_streams(
                 if on_source_verdict is not None and not healthy:
                     phase = 'streaming' if first_at is not None else 'starting'
                     await on_source_verdict(content_id, False, f'TV relay: {reason} while {phase}')
+            except (GeneratorExit, asyncio.CancelledError):
+                # The client closed the response, the source did not fail.
+                client_left = True
+                raise
             finally:
                 with anyio.CancelScope(shield=True):
                     await iterator.aclose()

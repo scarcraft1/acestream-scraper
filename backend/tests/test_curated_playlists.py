@@ -284,3 +284,41 @@ def test_relay_links_tell_kodi_they_are_mpeg_ts(client, seed_tv_channels, db_ses
     assert links and all(relay[i - 1] == '#KODIPROP:mimetype=video/mp2t' for i in links)
     own = client.get(path, params={'base_url': 'acestream://{channel_id}', 'only_online': 'false'}).text
     assert '#KODIPROP' not in own
+
+
+@pytest.mark.parametrize('path', ['/playlists/m3u', '/playlist.m3u', '/api/playlists/m3u', '/api/v1/playlists/m3u', '/api/v1/playlists/playlists/m3u'])
+def test_per_source_lists_each_source_under_its_relayed_channel(client, seed_tv_channels, db_session, path):
+    """Óscar, 14-10: he could not find how to change source, and preferred to
+    see every source in the list, named as the m3u names it, with the
+    acestream id. Each goes under its channel, with its guide, and opens that
+    source alone: acestream through the raw relay, a URL as in any list."""
+    from app.models.models import AcestreamChannel
+    tv, other = seed_tv_channels[0], seed_tv_channels[1]
+    ace = _make_stream(db_session, 'M+ Liga de Campeones 1080p --> ELCANO', tv_channel_id=tv.id)
+    web = AcestreamChannel(id='url:' + 'a' * 40, name='La 1 oficial', is_active=True, is_online=True,
+                           source_url='http://lista.example/x', stream_url='https://cdn.example.com/la1/master.m3u8',
+                           tv_channel_id=tv.id)
+    db_session.add(web)
+    db_session.commit()
+    _make_stream(db_session, 'Other source', tv_channel_id=other.id)
+    params = {'base_url': 'http://scraper.test/tuner/channel/{tv_channel_id}.ts', 'only_online': 'false',
+              'include_unassigned': 'false', 'per_source': 'true'}
+    lines = client.get(path, params=params).text.splitlines()
+    links = [line for line in lines if line and not line.startswith('#')]
+    start = links.index(f'http://scraper.test/tuner/channel/{tv.id}.ts')
+    assert set(links[start + 1:start + 3]) == {f'http://scraper.test/tuner/stream/{ace.id}.ts',
+                                               'https://cdn.example.com/la1/master.m3u8'}
+    assert links.count(f'http://scraper.test/tuner/channel/{other.id}.ts') == 1
+    ace_at = lines.index(f'http://scraper.test/tuner/stream/{ace.id}.ts')
+    assert lines[ace_at - 1] == '#KODIPROP:mimetype=video/mp2t'
+    extinf = lines[ace_at - 2]
+    assert extinf.endswith(f',M+ Liga de Campeones 1080p --> ELCANO [{ace.id[:8]}]')
+    assert f'tvg-chno="{tv.channel_number}.' in extinf
+    assert f'tvg-id="{tv.epg_id}"' in extinf
+    assert f'group-title="{tv.category}"' in extinf
+    web_extinf = lines[lines.index('https://cdn.example.com/la1/master.m3u8') - 1]
+    assert web_extinf.endswith(',La 1 oficial')
+    # Off by default, and meaningless for a format that already lists sources.
+    assert ace.id not in client.get(path, params={**params, 'per_source': 'false'}).text
+    own = client.get(path, params={**params, 'base_url': 'acestream://{channel_id}'}).text
+    assert own.count(f'acestream://{ace.id}') == 1

@@ -301,20 +301,8 @@ class TaskService:
         now = now or datetime.now(timezone.utc)
         brought = []
         for job_id in job_ids:
-            if self._schedule_anchors.get(job_id):
-                continue
-            interval = self._interval_seconds.get(job_id)
-            if not interval or self.scheduler.get_job(job_id) is None:
-                continue
-            last = (self.get_task_state(job_id) or {}).get("last_run")
-            if isinstance(last, str):
-                try:
-                    last = datetime.fromisoformat(last)
-                except ValueError:
-                    last = None
-            if last is not None and last.tzinfo is None:
-                last = last.replace(tzinfo=timezone.utc)
-            if last is not None and (now - last).total_seconds() < interval:
+            overdue, last, interval = self._overdue(job_id, now)
+            if not overdue:
                 continue
             when = now + timedelta(seconds=stagger_seconds * len(brought))
             self.scheduler.modify_job(job_id, next_run_time=when)
@@ -323,6 +311,62 @@ class TaskService:
                 job_id, last or "never", interval, when.isoformat())
             brought.append(job_id)
         return brought
+
+    def _overdue(self, job_id: str, now: datetime):
+        """(overdue, last_run, interval) for a registered interval job.
+
+        Never overdue when the user set a start time for it or it is not
+        registered: whoever asked for 04:00 wants 04:00.
+        """
+        if self._schedule_anchors.get(job_id):
+            return False, None, None
+        interval = self._interval_seconds.get(job_id)
+        if not interval or self.scheduler.get_job(job_id) is None:
+            return False, None, interval
+        last = (self.get_task_state(job_id) or {}).get("last_run")
+        if isinstance(last, str):
+            try:
+                last = datetime.fromisoformat(last)
+            except ValueError:
+                last = None
+        if last is not None and last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        if last is not None and (now - last).total_seconds() < interval:
+            return False, last, interval
+        return True, last, interval
+
+    def catch_up_later(self, job_id: str, delay_seconds: int = 900,
+                       now: Optional[datetime] = None) -> bool:
+        """Look again ``delay_seconds`` after startup and run ``job_id`` then
+        if it is still overdue.
+
+        For ``channel_status``, which CATCH_UP_JOBS leaves out: it opens the
+        engine, and at startup the box is loading its catalogue and the
+        viewer is opening a channel. Without it the first pass came one whole
+        interval after startup, and every restart pushed it back again. The
+        decision is taken when it fires, not now: if a pass ran meanwhile
+        (by hand, or a quick restart) nothing is duplicated. The pass itself
+        waits while someone watches (channel_status_task.wait_while_watching).
+
+        Returns whether the check was scheduled.
+        """
+        if self._schedule_anchors.get(job_id) or self.scheduler.get_job(job_id) is None:
+            return False
+        when = (now or datetime.now(timezone.utc)) + timedelta(seconds=delay_seconds)
+        self.scheduler.add_job(
+            self.run_if_overdue, trigger=DateTrigger(run_date=when), args=[job_id],
+            id=f"{job_id}_catch_up", replace_existing=True, misfire_grace_time=None)
+        self.logger.info("Task '%s' is checked for catch-up at %s", job_id, when.isoformat())
+        return True
+
+    def run_if_overdue(self, job_id: str, now: Optional[datetime] = None) -> str:
+        """Run ``job_id`` now if its last run is older than its interval."""
+        overdue, last, interval = self._overdue(job_id, now or datetime.now(timezone.utc))
+        if not overdue:
+            self.logger.info("Catch-up of '%s' not needed (last run %s)", job_id, last)
+            return "not_needed"
+        self.logger.info("Catching up task '%s' (last run %s, interval %ss)", job_id, last or "never", interval)
+        return self.run_task_now(job_id)
 
     def run_task_now(self, job_id: str) -> str:
         """Trigger a scheduled job to run immediately, outside its interval.

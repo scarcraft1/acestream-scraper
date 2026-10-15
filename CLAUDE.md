@@ -234,7 +234,10 @@ The scheduled pass waits between sources while someone watches
 (`services/viewing.py`: a relay claim, a starting/ready web-player session, or a
 player request to `/live/` within 30 s) and gives up after 10 minutes so the
 shared maintenance FIFO lets the guide refresh and scraping through; the
-least-recently-checked order lets the next pass resume. On 2026-10-14 it ran
+least-recently-checked order lets the next pass resume. Its order is never checked,
+favourite channels, any assigned stream, then loose ones. `channel_status` is
+not in CATCH_UP_JOBS (it opens the engine at startup); `catch_up_later` looks
+again 15 minutes after startup and runs it only if it is still overdue then. On 2026-10-14 it ran
 next to the match on the box, since it only skipped the playing source.
 
 ## Playback routing

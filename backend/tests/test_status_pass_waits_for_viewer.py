@@ -17,6 +17,11 @@ from app.tasks import channel_status_task
 
 @pytest.fixture(autouse=True)
 def _nobody_watching(monkeypatch):
+    # A fresh shutdown flag: an earlier test that stops the app leaves the
+    # process-wide one set, and then the pass stops before waiting at all.
+    import threading
+    from app.services.task_service import task_service
+    monkeypatch.setattr(task_service, "shutdown_event", threading.Event())
     monkeypatch.setattr(viewing, "_last_live_request", float("-inf"))
     for info in relay_registry.active():
         relay_registry.close(info.id)

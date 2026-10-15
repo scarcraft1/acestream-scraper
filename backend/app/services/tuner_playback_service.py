@@ -30,12 +30,6 @@ HEALTHY_SECONDS = 30.0
 # session outlives a closed client this long, so the second GET finds the
 # source still running instead of starting it cold (3.2 s on the box).
 STOP_LINGER_SECONDS = 5.0
-# A source not seen online lately gets this long to start instead of the
-# setting's 20 s. On the box, a channel stopped 4 s in and the relay spent
-# 20 s on each of two stale sources (one already known dead on the bench)
-# while Kodi showed the last frame. A slow-but-alive one only goes later:
-# timing out under this shorter wait writes no offline verdict.
-DOUBTFUL_ATTEMPT_SECONDS = 10.0
 logger = logging.getLogger(__name__)
 
 # Short, bounded process-local memory prevents reconnects picking a known failure
@@ -74,7 +68,6 @@ async def relay_ranked_streams(
     startup_budget_seconds: float | None = None,
     switch_midstream: bool = False,
     on_source_verdict: Callable[[str, bool, str], Awaitable[None]] | None = None,
-    is_doubtful: Callable[[str], bool] | None = None,
 ) -> AsyncIterator[bytes]:
     """Retry startup failures; midstream transcoding recovery is explicit opt-in.
 
@@ -128,11 +121,8 @@ async def relay_ranked_streams(
             version += 1
             first_at = last_at = None
             healthy = False
-            this_attempt = attempt_seconds
-            if is_doubtful is not None and is_doubtful(content_id):
-                this_attempt = min(attempt_seconds, DOUBTFUL_ATTEMPT_SECONDS)
             try:
-                with anyio.fail_after(min(this_attempt, max(.001, deadline - time.monotonic()))) as timer[0]:
+                with anyio.fail_after(min(attempt_seconds, max(.001, deadline - time.monotonic()))) as timer[0]:
                     first = await anext(iterator)
                 first_at = last_at = time.monotonic()
                 yield first
@@ -173,9 +163,7 @@ async def relay_ranked_streams(
                     content_id, reason, 'streaming' if first_at is not None else 'starting',
                     'acexy' if engine.use_acexy else 'direct', experimental_transcoding,
                 )
-                # Out of a shortened wait it may be slow, not dead: no verdict.
-                cut_short = first_at is None and isinstance(exc, TimeoutError) and this_attempt < attempt_seconds
-                if on_source_verdict is not None and not healthy and not cut_short:
+                if on_source_verdict is not None and not healthy:
                     phase = 'streaming' if first_at is not None else 'starting'
                     await on_source_verdict(content_id, False, f'TV relay: {reason} while {phase}')
             finally:

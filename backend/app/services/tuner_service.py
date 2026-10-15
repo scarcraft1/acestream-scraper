@@ -219,15 +219,6 @@ class TunerService:
         channel fail with a live source assigned to it. A recent offline
         verdict (a check, or the relay itself) still counts.
         """
-        return [entry[-1] for entry in self._relay_ranking(tv_channel_id)]
-
-    def relay_doubtful_ids(self, tv_channel_id: int) -> Set[str]:
-        """The relay's candidates NOT seen online in the last FRESH_CHECK_HOURS:
-        old online, never checked, old offline. The relay gives them less time
-        (tuner_playback_service.DOUBTFUL_ATTEMPT_SECONDS)."""
-        return {entry[-1] for entry in self._relay_ranking(tv_channel_id) if entry[0] > 0}
-
-    def _relay_ranking(self, tv_channel_id: int) -> list:
         streams = ChannelRepository(self.db).get_tuner_streams(tv_channel_id)
         fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
         ranked = []
@@ -245,8 +236,7 @@ class TunerService:
             # about a second, an acestream in 3 to 17 on the box.
             http = stream.id.startswith("url:")
             ranked.append((bucket, not http, -(stream.bitrate_bps or 0), _relay_id(stream)))
-        seen: Set[str] = set()
-        return [entry for entry in sorted(ranked) if not (entry[-1] in seen or seen.add(entry[-1]))]
+        return list(dict.fromkeys(entry[-1] for entry in sorted(ranked)))
 
     # --- lineup -------------------------------------------------------------
     def build_lineup(self) -> Lineup:

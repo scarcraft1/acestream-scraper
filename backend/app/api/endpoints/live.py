@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from app.config.database import get_db
 from app.models.models import AcestreamChannel
 from app.services import hls_manifest, live_providers
+from app.services import viewing
 from app.services.tuner_network import require_tuner_network
 from app.utils.outbound_http import source_get
 
@@ -222,6 +223,10 @@ async def open_live_stream(stream_id: str, request: Request, db: Session = Depen
     # reach the SPA fallback and come back as index.html with HTTP 200.
     if request.query_params.get("r") == "1":
         return await _open_for_relay(stream_id, stream_url, stream_headers, request)
+    # A player reading /live/ itself is someone watching: background checks
+    # wait (see app.services.viewing). The relay's own reads above are
+    # already counted through its claim.
+    viewing.note_live_request()
     if hls_manifest.needs_manifest(stream_url, stream_headers):
         if request.method == "HEAD":
             return Response(status_code=200, media_type=HLS_TYPE)

@@ -169,8 +169,13 @@ The current product already points toward a structured operational dashboard: Ma
 
 ### Tuner automatic failover and media metadata
 
-`services/tuner_playback_service.py` tries online, active, valid sources returned by
-`TunerService.online_stream_ids()` in descending `bitrate_bps` order (unknown last).
+`services/tuner_playback_service.py` tries the active, valid sources returned by
+`TunerService.relay_stream_ids()`: online and checked within `FRESH_CHECK_HOURS`, then
+online from an older check, then never checked or offline from an older check, each
+group by descending `bitrate_bps`; only a recent offline verdict is left out. The relay
+records its own verdicts (`record_playback_result`): healthy after `HEALTHY_SECONDS` of
+delivery, offline when a source fails before that. Healthy time ends at end of stream,
+or at the last chunk when a source stalls (the stall wait is not delivery).
 One reserved relay claim survives failed attempts; startup has per-attempt and total
 deadlines. By default failures after playback starts end the response; client
 reconnections prefer alternatives over sources that failed in the last 60 seconds. Each

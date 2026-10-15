@@ -187,6 +187,33 @@ class TunerService:
         valid.sort(key=lambda stream: (not _checked_since(stream, fresh_since), -(stream.bitrate_bps or 0), stream.id))
         return list(dict.fromkeys(stream.id.lower() for stream in valid))
 
+    def relay_stream_ids(self, tv_channel_id: int) -> List[str]:
+        """What the TV relay tries, in order: online and checked recently;
+        online from an old check; then never checked, or offline from an old
+        check. Only a source found offline recently is left out.
+
+        The box is switched on for a match: every status is then hours or
+        days old, and the source that is live tonight may be the one the
+        last check, last week, found offline. Leaving it out made the
+        channel fail with a live source assigned to it. A recent offline
+        verdict (a check, or the relay itself) still counts.
+        """
+        streams = ChannelRepository(self.db).get_tuner_streams(tv_channel_id)
+        fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
+        ranked = []
+        for stream in streams:
+            if not re.fullmatch(r"[0-9a-fA-F]{40}", stream.id):
+                continue
+            fresh = _checked_since(stream, fresh_since)
+            if stream.is_online:
+                bucket = 0 if fresh else 1
+            elif stream.is_online is False and fresh:
+                continue
+            else:
+                bucket = 2
+            ranked.append((bucket, -(stream.bitrate_bps or 0), stream.id.lower()))
+        return list(dict.fromkeys(cid for _, _, cid in sorted(ranked)))
+
     # --- lineup -------------------------------------------------------------
     def build_lineup(self) -> Lineup:
         """Active TV channels with at least one stream, in curated playlist

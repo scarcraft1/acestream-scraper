@@ -301,7 +301,18 @@ class PlaylistService:
                     attrs.append(f'group-title="{self._attr(tv_channel.category)}"')
 
                 lines.append(f'#EXTINF:-1 {" ".join(attrs)},{display_name}')
-                lines.extend(self._link_lines(self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None), live_base_url=self.live_base_url)))
+                if stable:
+                    # The relay opens HTTP sources too: the channel always
+                    # goes through it, whatever its first source is. Handing
+                    # Kodi that source's own URL (as _stream_link does for a
+                    # stream with stream_url) skipped the relay and its
+                    # failover: on the box Antena 3, laSexta, Neox, Nova and
+                    # Mega opened /live/ directly once their official source
+                    # ranked first, with no fallback to their acestreams.
+                    link = base_url.replace("{tv_channel_id}", str(tv_channel.id))
+                else:
+                    link = self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None), live_base_url=self.live_base_url)
+                lines.extend(self._link_lines(link))
                 if addpid:
                     pid_counter += 1
             if sources:

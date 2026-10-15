@@ -24,6 +24,13 @@ HEALTHY_SECONDS = 30.0
 # source still running instead of starting it cold (measured: 1.8 s more on
 # an amd64 bench, 3.2 s on an ARM box).
 STOP_LINGER_SECONDS = 5.0
+# An engine session that ends with no byte at all this soon is retried once
+# before the source counts as failed. Seen with Kodi (intermittent): its
+# second GET joined a source whose first reader had just left, the engine
+# answered 200 and closed at once, and with a single source the channel
+# failed. Only when no other candidate is left: otherwise the next source
+# goes first.
+EMPTY_START_RETRY_SECONDS = 3.0
 logger = logging.getLogger(__name__)
 
 # Short, bounded process-local memory prevents reconnects picking a known failure
@@ -68,6 +75,7 @@ async def relay_ranked_streams(
     started = time.monotonic()
     deadline = started + STARTUP_BUDGET_SECONDS
     attempted: set[str] = set()
+    retried_empty: set[str] = set()
     candidates = prefer_recovered_sources(content_ids)
     version = 0
     # The relay's own deadline (start or stall) of the read in progress.
@@ -104,6 +112,7 @@ async def relay_ranked_streams(
             iterator = remux_source(raw, version=version, offset=time.monotonic() - started) if experimental_transcoding else raw
             version += 1
             first_at = None
+            attempt_started = time.monotonic()
             try:
                 with anyio.fail_after(min(ATTEMPT_SECONDS, max(.001, deadline - time.monotonic()))) as timer[0]:
                     first = await anext(iterator)
@@ -114,6 +123,17 @@ async def relay_ranked_streams(
                         chunk = await anext(iterator)
                     yield chunk
             except (EngineRefusedError, EngineUnavailableError, EngineStreamError, StopAsyncIteration, TimeoutError) as exc:
+                empty_start = (isinstance(exc, StopAsyncIteration) and first_at is None
+                               and content_id not in retried_empty
+                               and time.monotonic() - attempt_started < EMPTY_START_RETRY_SECONDS
+                               and not [cid for cid in candidates if cid not in attempted])
+                if empty_start:
+                    # Empty at once and nothing else left to try: the same
+                    # source again, not as a failure.
+                    retried_empty.add(content_id)
+                    attempted.discard(content_id)
+                    logger.info('TV relay source %s ended empty at start; retrying it once', content_id)
+                    continue
                 record_source_failure(content_id)
                 # Do not include upstream exception text: it can contain URLs
                 # with credentials. Keep EOF distinct from our read deadline.

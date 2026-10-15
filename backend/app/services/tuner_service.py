@@ -109,6 +109,19 @@ class Lineup:
 FRESH_CHECK_HOURS = 6
 
 
+def _relayable(stream) -> bool:
+    """An acestream the engine opens, or an HTTP source with its URL
+    (app.services.http_relay)."""
+    if re.fullmatch(r"[0-9a-fA-F]{40}", stream.id):
+        return True
+    return stream.id.startswith("url:") and bool(getattr(stream, "stream_url", None))
+
+
+def _relay_id(stream) -> str:
+    # Acestream ids are case-insensitive hex; an HTTP id is kept as stored.
+    return stream.id if stream.id.startswith("url:") else stream.id.lower()
+
+
 def _checked_since(stream, since) -> bool:
     checked = getattr(stream, "last_checked", None)
     if checked is None:
@@ -178,14 +191,14 @@ class TunerService:
 
     def stream_ids(self, tv_channel_id: int, *, online_only: bool = False) -> List[str]:
         streams = ChannelRepository(self.db).get_tuner_streams(tv_channel_id, online_only=online_only)
-        valid = [stream for stream in streams if re.fullmatch(r"[0-9a-fA-F]{40}", stream.id)]
+        valid = [stream for stream in streams if _relayable(stream)]
         # Recently checked first, then by bitrate. A box that is only on now
         # and then keeps "online" from a session hours or days ago; the first
         # source tried eats 20 of the 30 s Kodi gives an opening, so a stale
         # one goes after every fresh one. It is not dropped: only tried later.
         fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
         valid.sort(key=lambda stream: (not _checked_since(stream, fresh_since), -(stream.bitrate_bps or 0), stream.id))
-        return list(dict.fromkeys(stream.id.lower() for stream in valid))
+        return list(dict.fromkeys(_relay_id(stream) for stream in valid))
 
     def relay_stream_ids(self, tv_channel_id: int) -> List[str]:
         """What the TV relay tries, in order: online and checked recently;
@@ -202,7 +215,7 @@ class TunerService:
         fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
         ranked = []
         for stream in streams:
-            if not re.fullmatch(r"[0-9a-fA-F]{40}", stream.id):
+            if not _relayable(stream):
                 continue
             fresh = _checked_since(stream, fresh_since)
             if stream.is_online:
@@ -211,8 +224,11 @@ class TunerService:
                 continue
             else:
                 bucket = 2
-            ranked.append((bucket, -(stream.bitrate_bps or 0), stream.id.lower()))
-        return list(dict.fromkeys(cid for _, _, cid in sorted(ranked)))
+            # Within a group an official HTTP source goes first: it opens in
+            # about a second, an acestream in 3 to 17 on the box.
+            http = stream.id.startswith("url:")
+            ranked.append((bucket, not http, -(stream.bitrate_bps or 0), _relay_id(stream)))
+        return list(dict.fromkeys(entry[-1] for entry in sorted(ranked)))
 
     # --- lineup -------------------------------------------------------------
     def build_lineup(self) -> Lineup:

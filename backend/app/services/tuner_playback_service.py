@@ -14,6 +14,7 @@ import httpx
 from app.services.engine_client import EngineClient, EngineRefusedError, EngineUnavailableError
 from app.services.stream_relay import EngineStreamError, RelayInfo, RelayRegistry, relay_engine_stream, relay_registry
 from app.services.tuner_remux import remux_source
+from app.services.http_relay import is_http_source, relay_http_stream
 
 STARTUP_BUDGET_SECONDS = 45.0
 ATTEMPT_SECONDS = 15.0
@@ -104,9 +105,12 @@ async def relay_ranked_streams(
             content_id = pending[0]
             attempted.add(content_id)
             registry.select_stream(claim.id, content_id)
-            raw = relay_engine_stream(engine, content_id, client_label, registry=registry,
-                client_factory=client_factory, claim=claim, release_claim=False,
-                stop_linger=stop_linger)
+            if is_http_source(content_id):
+                raw = relay_http_stream(content_id, claim=claim)
+            else:
+                raw = relay_engine_stream(engine, content_id, client_label, registry=registry,
+                    client_factory=client_factory, claim=claim, release_claim=False,
+                    stop_linger=stop_linger)
             iterator = remux_source(raw, version=version, offset=time.monotonic() - started) if experimental_transcoding else raw
             version += 1
             first_at = last_at = None

@@ -176,6 +176,18 @@ group by descending `bitrate_bps`; only a recent offline verdict is left out. Th
 records its own verdicts (`record_playback_result`): healthy after `HEALTHY_SECONDS` of
 delivery, offline when a source fails before that. Healthy time ends at end of stream,
 or at the last chunk when a source stalls (the stall wait is not delivery).
+HTTP sources (`url:` ids with a `stream_url`) are relayed too and go first within
+their group: `services/http_relay.py` runs ffmpeg `-c copy` to MPEG-TS reading our
+own `/live/{id}?r=1` on loopback, because the upstream image's ffmpeg has no TLS.
+That loopback-only mode resolves broadcasters, fetches every manifest, key and
+segment through `source_get` with the stream's headers, serves them signed
+(`hls_manifest.serve_all`, subtitles removed: a WebVTT rendition failed the whole
+opening), and leaves Kodi's own `/live/` behaviour unchanged. When the client
+leaves (the server cancels the response; the cancellation reaches the engine
+reader first), the final engine stop is deferred `STOP_LINGER_SECONDS` (5) so
+Kodi's second GET finds the source running; a start within it parks the old
+session, stopped with the source's final stop. The relay's own start/stall
+deadlines stop at once.
 One reserved relay claim survives failed attempts; startup has per-attempt and total
 deadlines. By default failures after playback starts end the response; client
 reconnections prefer alternatives over sources that failed in the last 60 seconds. Each

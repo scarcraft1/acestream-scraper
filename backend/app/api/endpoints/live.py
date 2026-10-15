@@ -16,6 +16,7 @@ The playback headers travel in the playlist entry (`url|Referer=...`);
 Kodi keeps sending them after a redirect and to every segment.
 """
 import asyncio
+import ipaddress
 import time
 from urllib.parse import quote, urljoin
 
@@ -51,6 +52,8 @@ _recent: dict = {}
 OPEN_BUDGET_SECONDS = 15
 # A manifest is a few hundred KB at most (cdnmedia's DVR chunklist: 290 KB).
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+# A segment for the TV relay: a few seconds of 1080p is a few MB.
+MAX_SEGMENT_BYTES = 64 * 1024 * 1024
 MAX_REDIRECTS = 5
 
 
@@ -66,7 +69,7 @@ def _resolve_once(stream_url: str):
     return link
 
 
-def _fetch_manifest(url: str, headers: dict):
+def _fetch_manifest(url: str, headers: dict, limit: int = MAX_MANIFEST_BYTES):
     """(final URL, body, content type), following redirects through the
     guarded client: every hop's address is checked, these URLs come from
     third-party playlists."""
@@ -76,8 +79,63 @@ def _fetch_manifest(url: str, headers: dict):
             url = urljoin(url, response.headers['Location'])
             continue
         response.raise_for_status()
-        return url, response.content[:MAX_MANIFEST_BYTES], response.headers.get('Content-Type') or ''
+        if len(response.content) > limit:
+            raise ValueError('response too large')
+        return url, response.content, response.headers.get('Content-Type') or ''
     raise ValueError('too many redirects')
+
+
+def _serve_for_relay(stream_id: str, url: str, headers: dict):
+    """Loopback only: what the TV relay's ffmpeg reads (see
+    hls_manifest.serve_all). A manifest comes back rewritten; anything else
+    -- a segment, a key, an init map -- is passed through as fetched."""
+    try:
+        final_url, body, content_type = _fetch_manifest(url, headers, MAX_SEGMENT_BYTES)
+    except Exception as error:
+        return JSONResponse({"detail": f"The origin did not answer: {error}"}, status_code=502)
+    if '#EXTM3U' not in body[:512].decode('utf-8', 'replace'):
+        return Response(content=body, media_type=content_type or 'application/octet-stream')
+
+    def link(absolute_url: str) -> str:
+        return (f"/live/{quote(stream_id, safe='')}?r=1&u={quote(absolute_url, safe='')}"
+                f"&s={hls_manifest.sign(absolute_url)}")
+
+    served = hls_manifest.serve_all(body.decode('utf-8', 'replace'), final_url, link)
+    return Response(content=served.encode('utf-8'), media_type=HLS_TYPE)
+
+
+def _is_loopback(request: Request) -> bool:
+    host = request.client.host if request.client else ''
+    try:
+        return ipaddress.ip_address(host.strip('[]')).is_loopback
+    except ValueError:
+        return False
+
+
+async def _open_for_relay(stream_id: str, stream_url, stream_headers: dict, request: Request):
+    if not _is_loopback(request):
+        return JSONResponse({"detail": "Only the relay on this server"}, status_code=403)
+    nested = request.query_params.get("u")
+    if nested is not None:
+        if not hls_manifest.is_signed(nested, request.query_params.get("s", "")):
+            return JSONResponse({"detail": "Unsigned URL"}, status_code=403)
+        url = nested
+    elif live_providers.for_stream_url(stream_url) is not None:
+        try:
+            url = await asyncio.wait_for(run_in_threadpool(_resolve_once, stream_url), OPEN_BUDGET_SECONDS)
+        except asyncio.TimeoutError:
+            url = None
+        if not url:
+            return JSONResponse({"detail": "The broadcaster did not return a live link"}, status_code=502)
+    elif str(stream_url or '').lower().startswith(('http://', 'https://')):
+        url = stream_url
+    else:
+        return JSONResponse({"detail": "Not an HTTP stream"}, status_code=404)
+    try:
+        return await asyncio.wait_for(
+            run_in_threadpool(_serve_for_relay, stream_id, url, stream_headers), OPEN_BUDGET_SECONDS)
+    except asyncio.TimeoutError:
+        return JSONResponse({"detail": "The origin did not answer in time"}, status_code=502)
 
 
 def _serve_manifest(stream_id: str, url: str, headers: dict):
@@ -112,6 +170,8 @@ async def open_live_stream(stream_id: str, request: Request, db: Session = Depen
     db.close()
     # Errors are answered as JSON here: a 404 raised as an exception would
     # reach the SPA fallback and come back as index.html with HTTP 200.
+    if request.query_params.get("r") == "1":
+        return await _open_for_relay(stream_id, stream_url, stream_headers, request)
     if hls_manifest.needs_manifest(stream_url, stream_headers):
         if request.method == "HEAD":
             return Response(status_code=200, media_type=HLS_TYPE)

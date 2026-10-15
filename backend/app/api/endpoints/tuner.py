@@ -8,6 +8,7 @@ API token protects like every other ``/api/v1`` route.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import html
 import re
@@ -22,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.api.error_handlers import APIError
 from app.config.database import SessionLocal, get_db
+from app.repositories.channel_repository import ChannelRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.schemas.tuner import TunerSettingsResponse, TunerSettingsUpdate, TunerStatusResponse, TunerUrls
 from app.services.engine_client import EngineClient, EngineRefusedError, EngineUnavailableError, playback_client_from_settings
@@ -34,6 +36,8 @@ from app.services.tuner_service import TunerService
 from app.services.tuner_playback_service import relay_ranked_streams, prefer_recovered_sources
 from app.services.tuner_remux import ffmpeg_binary
 from app.services.tuner_probe_service import tuner_probe_service
+
+logger = logging.getLogger(__name__)
 
 hdhr_router = APIRouter(prefix="/tuner", dependencies=[Depends(require_tuner_network)], tags=["hdhomerun"])
 router = APIRouter()  # /api/v1/tuner settings + status
@@ -268,6 +272,14 @@ def _setting_on(key: str) -> bool:
         db.close()
 
 
+def _record_playback_result(content_id: str, ok: bool, note: str) -> None:
+    db = SessionLocal()
+    try:
+        ChannelRepository(db).record_playback_result(content_id, ok, note)
+    finally:
+        db.close()
+
+
 def _refresh_while_playing() -> bool:
     return _setting_on("tuner_refresh_while_playing")
 
@@ -281,7 +293,9 @@ def _switch_on_failure() -> bool:
 def _channel_candidates(tv_channel_id: int, *, include_offline: bool = False) -> List[str]:
     db = SessionLocal()
     try:
-        return prefer_recovered_sources(TunerService(db).stream_ids(tv_channel_id, online_only=not include_offline))
+        service = TunerService(db)
+        ids = service.stream_ids(tv_channel_id) if include_offline else service.relay_stream_ids(tv_channel_id)
+        return prefer_recovered_sources(ids)
     finally:
         db.close()
 
@@ -322,6 +336,12 @@ async def tuner_channel(tv_channel_id: int, request: Request):
 
     monitor = asyncio.create_task(monitor_alternatives() if refresh_while_playing else asyncio.sleep(0))
 
+    async def _source_verdict(content_id: str, ok: bool, note: str) -> None:
+        try:
+            await run_in_threadpool(_record_playback_result, content_id, ok, note)
+        except Exception:
+            logger.warning("Could not record the relay's verdict for %s", content_id)
+
     async def refreshed_candidates() -> tuple[List[str], bool]:
         current = await run_in_threadpool(_channel_candidates, tv_channel_id)
         return current, refresh is not None and not refresh.done()
@@ -342,7 +362,8 @@ async def tuner_channel(tv_channel_id: int, request: Request):
                                       experimental_transcoding=experimental_transcoding,
                                       attempt_seconds=relay_settings.source_start_seconds,
                                       startup_budget_seconds=relay_settings.startup_budget_seconds,
-                                      switch_midstream=await run_in_threadpool(_switch_on_failure))
+                                      switch_midstream=await run_in_threadpool(_switch_on_failure),
+                                      on_source_verdict=_source_verdict)
         first = await anext(iterator)
     except BaseException as exc:
         monitor.cancel()

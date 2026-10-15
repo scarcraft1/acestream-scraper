@@ -440,6 +440,20 @@ class ChannelRepository:
             AcestreamChannel.id == channel_id,
         ).scalar()
 
+    def record_playback_result(self, channel_id: str, ok: bool, note: Optional[str] = None) -> None:
+        """What the TV relay learnt by playing a source: online or not, now.
+
+        Only the verdict and its time: the engine lookup (network_status),
+        bitrate and audio tracks stay as the last check left them.
+        """
+        channel = self.get_channel_by_id(channel_id)
+        if not channel:
+            return
+        channel.is_online = ok
+        channel.last_checked = datetime.now(timezone.utc)
+        channel.check_error = None if ok else note
+        self.db.commit()
+
     def get_status_snapshot(self, channel_id: str) -> Optional[dict]:
         row = self.db.query(AcestreamChannel.is_online, AcestreamChannel.last_checked, AcestreamChannel.network_status, AcestreamChannel.stream_stats).filter(
             AcestreamChannel.id == channel_id,

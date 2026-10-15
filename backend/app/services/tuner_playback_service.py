@@ -56,6 +56,7 @@ async def relay_ranked_streams(
     attempt_seconds: float | None = None,
     startup_budget_seconds: float | None = None,
     switch_midstream: bool = False,
+    on_source_verdict: Callable[[str, bool, str], Awaitable[None]] | None = None,
 ) -> AsyncIterator[bytes]:
     """Retry startup failures; midstream transcoding recovery is explicit opt-in.
 
@@ -96,18 +97,36 @@ async def relay_ranked_streams(
                 client_factory=client_factory, claim=claim, release_claim=False)
             iterator = remux_source(raw, version=version, offset=time.monotonic() - started) if experimental_transcoding else raw
             version += 1
-            first_at = None
+            first_at = last_at = None
+            healthy = False
             try:
                 with anyio.fail_after(min(attempt_seconds, max(.001, deadline - time.monotonic()))):
                     first = await anext(iterator)
-                first_at = time.monotonic()
+                first_at = last_at = time.monotonic()
                 yield first
                 while True:
                     with anyio.fail_after(STALL_SECONDS):
                         chunk = await anext(iterator)
+                    last_at = time.monotonic()
                     yield chunk
+                    if not healthy and last_at - first_at >= HEALTHY_SECONDS:
+                        healthy = True
+                        # What playing taught us is written down, so the next
+                        # opening starts with a source that really plays. The
+                        # check alone kept a source "online" that only replays
+                        # the engine's old buffer and dries up after ~13 s.
+                        if on_source_verdict is not None:
+                            await on_source_verdict(content_id, True, 'played')
             except (EngineRefusedError, EngineUnavailableError, EngineStreamError, StopAsyncIteration, TimeoutError) as exc:
                 record_source_failure(content_id)
+                # A source lived until its end of stream, but only until its
+                # last chunk when it stalled: the stall wait itself lasts
+                # STALL_SECONDS, and counting it made a source that sent one
+                # chunk and stalled look healthy, so two such sources took
+                # turns forever.
+                if first_at is not None:
+                    ended_at = last_at if isinstance(exc, TimeoutError) else time.monotonic()
+                    healthy = healthy or ended_at - first_at >= HEALTHY_SECONDS
                 # Do not include upstream exception text: it can contain URLs
                 # with credentials. Keep EOF distinct from our read deadline.
                 reason = (
@@ -122,10 +141,13 @@ async def relay_ranked_streams(
                     content_id, reason, 'streaming' if first_at is not None else 'starting',
                     'acexy' if engine.use_acexy else 'direct', experimental_transcoding,
                 )
+                if on_source_verdict is not None and not healthy:
+                    phase = 'streaming' if first_at is not None else 'starting'
+                    await on_source_verdict(content_id, False, f'TV relay: {reason} while {phase}')
             finally:
                 with anyio.CancelScope(shield=True):
                     await iterator.aclose()
-            if first_at is not None and time.monotonic() - first_at >= HEALTHY_SECONDS:
+            if healthy:
                 attempted = {content_id}
                 deadline = time.monotonic() + startup_budget_seconds
             if on_source_failure is not None:

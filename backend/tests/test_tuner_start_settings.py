@@ -139,3 +139,77 @@ def test_LA_RUTA_PASA_EL_AJUSTE_DE_SALTAR():
     import inspect
     from app.api.endpoints import tuner
     assert 'switch_midstream=await run_in_threadpool(_switch_on_failure)' in inspect.getsource(tuner)
+
+
+@pytest.mark.asyncio
+async def test_EL_RELE_APUNTA_LO_QUE_APRENDE(monkeypatch):
+    """A source that dries up is written down as offline; one that plays
+    past HEALTHY_SECONDS as online. Measured on the box: a source kept
+    "online" by the check only replayed old buffer and stalled each time."""
+    import app.services.tuner_playback_service as playback
+    verdicts = []
+
+    async def relay(_engine, content_id, _label, **kwargs):
+        yield f'{content_id}-a'.encode()
+        if content_id == 'stale':
+            await asyncio.sleep(10)
+        for i in range(3):
+            await asyncio.sleep(0.03)
+            yield f'{content_id}-{i}'.encode()
+
+    async def verdict(cid, ok, note):
+        verdicts.append((cid, ok, note))
+    monkeypatch.setattr(playback, 'relay_engine_stream', relay)
+    monkeypatch.setattr(playback, 'STALL_SECONDS', 0.05)
+    monkeypatch.setattr(playback, 'HEALTHY_SECONDS', 0.05)
+    registry = RelayRegistry()
+    claim = registry.try_open('stale', 'viewer', 1)
+    from app.services.stream_relay import EngineStreamError
+    with pytest.raises(EngineStreamError):
+        async with asyncio.timeout(3):
+            async for _ in relay_ranked_streams(Mock(), ['stale', 'live'], 'viewer', claim, registry=registry,
+                                                attempt_seconds=1, startup_budget_seconds=2, switch_midstream=True,
+                                                on_source_verdict=verdict):
+                pass
+    assert verdicts[0] == ('stale', False, 'TV relay: read_timeout while streaming')
+    assert ('live', True, 'played') in verdicts
+    # A source that already proved itself is not marked offline when it ends later.
+    assert ('live', False) not in [(c, ok) for c, ok, _ in verdicts]
+
+
+def test_EL_VEREDICTO_SE_GUARDA_SIN_TOCAR_LO_DEMAS(db_session):
+    from app.models.models import AcestreamChannel
+    from app.repositories.channel_repository import ChannelRepository
+    db_session.add(AcestreamChannel(id='b' * 40, name='x', is_online=True, network_status='found', bitrate_bps=5_000_000))
+    db_session.commit()
+    ChannelRepository(db_session).record_playback_result('b' * 40, False, 'TV relay: read_timeout while streaming')
+    row = db_session.get(AcestreamChannel, 'b' * 40)
+    assert (row.is_online, row.check_error, row.network_status, row.bitrate_bps) == (
+        False, 'TV relay: read_timeout while streaming', 'found', 5_000_000)
+    assert row.last_checked is not None
+
+
+@pytest.mark.asyncio
+async def test_DOS_FUENTES_QUE_SE_ATASCAN_NO_SE_TURNAN_SIN_FIN(monkeypatch):
+    """The stall wait is not playing time. Both sources send one chunk and
+    stall; counting the STALL_SECONDS wait as healthy delivery reset the
+    attempts after each one and the relay alternated between them forever."""
+    import app.services.tuner_playback_service as playback
+    calls = []
+
+    async def relay(_engine, content_id, _label, **kwargs):
+        calls.append(content_id)
+        yield f'{content_id}-a'.encode()
+        await asyncio.sleep(10)
+    monkeypatch.setattr(playback, 'relay_engine_stream', relay)
+    monkeypatch.setattr(playback, 'STALL_SECONDS', 0.05)
+    monkeypatch.setattr(playback, 'HEALTHY_SECONDS', 0.04)
+    registry = RelayRegistry()
+    claim = registry.try_open('one', 'viewer', 1)
+    from app.services.stream_relay import EngineStreamError
+    with pytest.raises(EngineStreamError):
+        async with asyncio.timeout(3):
+            async for _ in relay_ranked_streams(Mock(), ['one', 'two'], 'viewer', claim, registry=registry,
+                                                attempt_seconds=1, startup_budget_seconds=60, switch_midstream=True):
+                pass
+    assert calls == ['one', 'two']

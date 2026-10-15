@@ -12,6 +12,7 @@ import asyncio
 import time
 
 import anyio
+from unittest.mock import Mock
 import httpx
 import pytest
 
@@ -137,3 +138,57 @@ def test_SI_NO_QUEDAN_FUENTES_A_MITAD_LA_RESPUESTA_ACABA_SIN_TRAZA(alembic_clien
     finally:
         monkeypatch.undo()
         get_settings.cache_clear(); get_tuner_gate.cache_clear()
+
+
+# --- an engine session that is empty at once ---------------------------------
+
+def _empty_then(monkeypatch, outcomes, delay=0):
+    calls = []
+
+    async def relay(_engine, content_id, _label, **kwargs):
+        calls.append(content_id)
+        outcome = outcomes[min(len(calls), len(outcomes)) - 1]
+        await asyncio.sleep(delay)
+        if outcome == 'empty':
+            return
+        yield b'video'
+    monkeypatch.setattr(playback, 'relay_engine_stream', relay)
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_UNA_SESION_VACIA_AL_ARRANCAR_SE_REINTENTA_UNA_VEZ(monkeypatch):
+    """Bench, 13:32 (intermittent): the engine answered 200 and closed at once
+    for the second GET's session; with one source the channel fell back to
+    the card."""
+    calls = _empty_then(monkeypatch, ['empty', 'video'])
+    registry = RelayRegistry()
+    claim = registry.try_open(CID, 'kodi', 1)
+    first = await anext(playback.relay_ranked_streams(Mock(), [CID], 'kodi', claim,
+                                                      registry=registry, attempt_seconds=1, startup_budget_seconds=2))
+    assert first == b'video' and calls == [CID, CID]
+
+
+@pytest.mark.asyncio
+async def test_SOLO_UNA_VEZ(monkeypatch):
+    from app.services.stream_relay import EngineStreamError
+    calls = _empty_then(monkeypatch, ['empty'])
+    registry = RelayRegistry()
+    claim = registry.try_open(CID, 'kodi', 1)
+    with pytest.raises(EngineStreamError):
+        await anext(playback.relay_ranked_streams(Mock(), [CID], 'kodi', claim,
+                                                  registry=registry, attempt_seconds=1, startup_budget_seconds=2))
+    assert calls == [CID, CID]
+
+
+@pytest.mark.asyncio
+async def test_UNA_QUE_TARDA_EN_ACABARSE_NO_SE_REINTENTA(monkeypatch):
+    from app.services.stream_relay import EngineStreamError
+    monkeypatch.setattr(playback, 'EMPTY_START_RETRY_SECONDS', 0.05)
+    calls = _empty_then(monkeypatch, ['empty', 'video'], delay=0.1)
+    registry = RelayRegistry()
+    claim = registry.try_open(CID, 'kodi', 1)
+    with pytest.raises(EngineStreamError):
+        await anext(playback.relay_ranked_streams(Mock(), [CID], 'kodi', claim,
+                                                  registry=registry, attempt_seconds=1, startup_budget_seconds=2))
+    assert calls == [CID]

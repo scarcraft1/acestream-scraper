@@ -228,7 +228,8 @@ owned by the relay/web player and recheck ownership before cleanup; do not remov
 this protection based on distinct session URLs. See `docs/ops/stream-check-pid.md`.
 The scheduled pass waits between sources while someone watches
 (`services/viewing.py`: a relay claim, a starting/ready web-player session, or a
-player request to `/live/` within 30 s) and gives up after one interval; the
+player request to `/live/` within 30 s) and gives up after 10 minutes so the
+shared maintenance FIFO lets the guide refresh and scraping through; the
 least-recently-checked order lets the next pass resume. On 2026-10-14 it ran
 next to the match on the box, since it only skipped the playing source.
 

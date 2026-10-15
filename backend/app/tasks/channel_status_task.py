@@ -14,13 +14,18 @@ from app.services import viewing
 
 # How often a paused pass looks again whether someone is still watching.
 VIEWING_POLL_SECONDS = 5.0
+# How long a pass waits in all before it ends. Scheduled jobs share one FIFO
+# queue: a paused pass holds the guide refresh and the scraping behind it, so
+# it lets them through after this and the next pass tries again.
+VIEWING_MAX_PAUSE_SECONDS = 600.0
 
 
 async def wait_while_watching(logger, max_seconds: float) -> tuple[float, bool]:
     """Hold the pass while someone watches. Returns (seconds waited, gave up).
 
-    It gives up after ``max_seconds`` -- one interval -- so a long match does
-    not leave a pass hanging: the next one resumes where this stopped,
+    It gives up after ``max_seconds`` (VIEWING_MAX_PAUSE_SECONDS in all) so a
+    long match does not hold the maintenance queue -- guide refresh and
+    scraping wait behind this job. The next pass resumes where this stopped,
     because the check order is least recently checked first.
     """
     reason = viewing.watching()
@@ -87,7 +92,7 @@ def run_channel_status_task():
             online = 0
             offline = 0
             paused = 0.0
-            max_pause = task_service._interval_seconds.get("channel_status", 3600)
+            max_pause = VIEWING_MAX_PAUSE_SECONDS
             for channel_id in channels:
                 if task_service.shutdown_event.is_set():
                     break

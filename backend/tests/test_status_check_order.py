@@ -87,3 +87,22 @@ def test_LAS_INACTIVAS_NO_ENTRAN(db_session):
     _stream(db_session, "inactiva", active=False)
     db_session.commit()
     assert channels_in_check_order(db_session) == ["activa"]
+
+
+def test_LAS_DE_UN_CANAL_ANTES_QUE_LAS_SUELTAS(db_session):
+    """En la caja hay 0 favoritos: sin este nivel, las 613 fuentes de canales
+    iban mezcladas con 935 sueltas que la lista del rele no abre."""
+    otro = _tv(db_session, "La 1", False)
+    _stream(db_session, "suelta_vieja", T0 - timedelta(days=5))
+    _stream(db_session, "de_canal_reciente", T0, tv=otro)
+    db_session.commit()
+    assert channels_in_check_order(db_session) == ["de_canal_reciente", "suelta_vieja"]
+
+
+def test_EL_FAVORITO_SIGUE_ANTES_QUE_OTRO_CANAL(db_session):
+    fav = _tv(db_session, "Favorito", True)
+    otro = _tv(db_session, "Otro", False)
+    _stream(db_session, "de_otro_viejo", T0 - timedelta(days=5), tv=otro)
+    _stream(db_session, "de_favorito_reciente", T0, tv=fav)
+    db_session.commit()
+    assert channels_in_check_order(db_session) == ["de_favorito_reciente", "de_otro_viejo"]

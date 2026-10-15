@@ -57,17 +57,20 @@ def channels_in_check_order(db):
     Now:
       1. never checked            -- the tail that was never reached
       2. streams of favourite TV channels -- the ones the viewer cares about
-      3. the rest, least recently checked first
+      3. streams of any other TV channel -- what the playlist can open; on
+         the box (0 favourites) they were mixed with 935 loose streams
+      4. the rest, least recently checked first
 
     Ordering by `last_checked` makes a restarted pass resume by itself: what
     was just checked moves to the end. No cursor to store.
     """
     never = case((AcestreamChannel.last_checked.is_(None), 0), else_=1)
     favourite = case((TVChannel.is_favorite.is_(True), 0), else_=1)
+    assigned = case((AcestreamChannel.tv_channel_id.is_(None), 1), else_=0)
     rows = (db.query(AcestreamChannel.id)
             .outerjoin(TVChannel, AcestreamChannel.tv_channel_id == TVChannel.id)
             .filter(AcestreamChannel.is_active == True)  # noqa: E712
-            .order_by(never, favourite, AcestreamChannel.last_checked.asc(),
+            .order_by(never, favourite, assigned, AcestreamChannel.last_checked.asc(),
                       AcestreamChannel.id.asc())
             .all())
     return [row[0] for row in rows]

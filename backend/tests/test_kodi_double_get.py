@@ -126,15 +126,22 @@ def test_SI_NO_QUEDAN_FUENTES_A_MITAD_LA_RESPUESTA_ACABA_SIN_TRAZA(alembic_clien
         monkeypatch.setattr(tuner.tuner_probe_service, 'start', Mock())
         monkeypatch.setattr(tuner, '_engine', lambda: Mock())
 
-        async def ranked(*args, **kwargs):
-            yield b'\x47' + bytes(187)
-            raise EngineStreamError('No source could sustain TV channel playback within the recovery budget')
+        async def ranked(engine, content_ids, label, claim, **kwargs):
+            # Like the real relay, it releases the tuner slot it was given:
+            # left in the process-wide registry, later tests saw someone
+            # watching (the status pass paused 10 min, twice).
+            try:
+                yield b'\x47' + bytes(187)
+                raise EngineStreamError('No source could sustain TV channel playback within the recovery budget')
+            finally:
+                tuner.relay_registry.close(claim.id)
         monkeypatch.setattr(tuner, 'relay_ranked_streams', ranked)
         monkeypatch.setattr(tuner, '_setting_on', lambda key: False)
         caplog.set_level('INFO')
         response = alembic_client.get(f'/tuner/channel/{tv.id}.ts')
         assert response.status_code == 200 and response.content.startswith(b'\x47')
         assert 'no source left' in caplog.text
+        assert tuner.relay_registry.active() == []
     finally:
         monkeypatch.undo()
         get_settings.cache_clear(); get_tuner_gate.cache_clear()

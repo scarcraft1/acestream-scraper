@@ -81,7 +81,7 @@ def test_LA_RUTA_DEL_RELE_PASA_LOS_AJUSTES(db_session, monkeypatch):
     from app.api.endpoints import tuner
     source = inspect.getsource(tuner)
     assert 'attempt_seconds=relay_settings.source_start_seconds' in source
-    assert 'startup_budget_seconds=relay_settings.startup_budget_seconds' in source
+    assert 'startup_budget_seconds=budget' in source
 
 
 def _source_that(dies_after_chunks, tag):

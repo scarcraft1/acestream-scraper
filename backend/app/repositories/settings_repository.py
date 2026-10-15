@@ -28,6 +28,7 @@ class SettingsRepository:
     TUNER_EXPERIMENTAL_TRANSCODING = 'tuner_experimental_transcoding'
     TUNER_SOURCE_START_SECONDS = 'tuner_source_start_seconds'
     TUNER_STARTUP_BUDGET_SECONDS = 'tuner_startup_budget_seconds'
+    TUNER_WAITING_CARD_SECONDS = 'tuner_waiting_card_seconds'
 
     # Constants for default values
     DEFAULT_BASE_URL = 'acestream://'
@@ -58,6 +59,9 @@ class SettingsRepository:
     # start; 28 s leaves room for another after one that fails quickly.
     DEFAULT_TUNER_SOURCE_START_SECONDS = '20'
     DEFAULT_TUNER_STARTUP_BUDGET_SECONDS = '28'
+    # The waiting card (services/waiting_card.py) only after the first source
+    # had its 20 s: Óscar wants it as rarely as possible. 0 turns it off.
+    DEFAULT_TUNER_WAITING_CARD_SECONDS = '20'
 
     # Keys whose stored empty value means "not configured" rather than
     # "deliberately blank". Their DEFAULT_<KEY> comes from the environment, and

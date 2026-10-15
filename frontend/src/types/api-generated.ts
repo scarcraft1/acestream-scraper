@@ -3661,6 +3661,12 @@ export interface components {
       startup_budget_seconds?: number;
       /** Tuner Count */
       tuner_count: number;
+      /**
+       * Waiting Card Seconds
+       * @description Seconds without video before a «Conectando…» card is sent while more sources are tried; 0 = never
+       * @default 20
+       */
+      waiting_card_seconds?: number;
     };
     /** TunerSettingsUpdate */
     TunerSettingsUpdate: {
@@ -3678,6 +3684,8 @@ export interface components {
       startup_budget_seconds?: number | null;
       /** Tuner Count */
       tuner_count?: number | null;
+      /** Waiting Card Seconds */
+      waiting_card_seconds?: number | null;
     };
     /** TunerStatusResponse */
     TunerStatusResponse: {
@@ -3994,6 +4002,7 @@ export interface operations {
         group?: string | null;
         only_online?: boolean;
         include_unassigned?: boolean | null;
+        per_source?: boolean;
         include_groups?: string | null;
         exclude_groups?: string | null;
         base_url?: string | null;
@@ -6298,6 +6307,8 @@ export interface operations {
         only_online?: boolean;
         /** @description Append unassigned streams at the end; defaults off for TV relay formats, on for stream formats. */
         include_unassigned?: boolean | null;
+        /** @description TV relay formats: list each source under its channel, to switch by hand. */
+        per_source?: boolean;
         favorites_only?: boolean;
         include_groups?: string | null;
         exclude_groups?: string | null;
@@ -6337,6 +6348,8 @@ export interface operations {
         only_online?: boolean;
         /** @description Append unassigned streams at the end; defaults off for TV relay formats, on for stream formats. */
         include_unassigned?: boolean | null;
+        /** @description TV relay formats: list each source under its channel, to switch by hand. */
+        per_source?: boolean;
         favorites_only?: boolean;
         include_groups?: string | null;
         exclude_groups?: string | null;
@@ -7933,6 +7946,7 @@ export interface operations {
         group?: string | null;
         only_online?: boolean;
         include_unassigned?: boolean | null;
+        per_source?: boolean;
         include_groups?: string | null;
         exclude_groups?: string | null;
         base_url?: string | null;
@@ -7967,6 +7981,7 @@ export interface operations {
         group?: string | null;
         only_online?: boolean;
         include_unassigned?: boolean | null;
+        per_source?: boolean;
         include_groups?: string | null;
         exclude_groups?: string | null;
         base_url?: string | null;

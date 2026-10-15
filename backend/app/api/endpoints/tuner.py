@@ -36,6 +36,7 @@ from app.services.tuner_service import TunerService
 from app.services.tuner_playback_service import relay_ranked_streams, prefer_recovered_sources
 from app.services.tuner_remux import ffmpeg_binary
 from app.services.tuner_probe_service import tuner_probe_service
+from app.services import waiting_card
 
 logger = logging.getLogger(__name__)
 
@@ -357,13 +358,22 @@ async def tuner_channel(tv_channel_id: int, request: Request):
         if experimental_transcoding:
             await run_in_threadpool(ffmpeg_binary)
         engine = await run_in_threadpool(_engine)
+        # With the waiting card Kodi opens the card before its 30 s limit, so
+        # the start may go on for as long as the card lasts and try more sources.
+        card_after = relay_settings.waiting_card_seconds
+        budget = relay_settings.startup_budget_seconds
+        if card_after > 0:
+            budget = max(budget, int(waiting_card.CARD_SECONDS) - 2)
         iterator = relay_ranked_streams(engine, candidates, label, claim, client_factory=_relay_client_factory,
                                       candidate_provider=refreshed_candidates, on_source_failure=refresh_failed_source,
                                       experimental_transcoding=experimental_transcoding,
                                       attempt_seconds=relay_settings.source_start_seconds,
-                                      startup_budget_seconds=relay_settings.startup_budget_seconds,
+                                      startup_budget_seconds=budget,
                                       switch_midstream=await run_in_threadpool(_switch_on_failure),
                                       on_source_verdict=_source_verdict)
+        if card_after > 0:
+            iterator = waiting_card.with_waiting_card(iterator, await run_in_threadpool(waiting_card.load_card),
+                                                      after=card_after)
         first = await anext(iterator)
     except BaseException as exc:
         monitor.cancel()

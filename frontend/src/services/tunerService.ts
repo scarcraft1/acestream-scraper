@@ -10,6 +10,8 @@ export interface TunerSettings {
   source_start_seconds?: number;
   /** Seconds for the whole start across sources; under Kodi's 60 s timeout. */
   startup_budget_seconds?: number;
+  /** Seconds without video before the «Conectando…» card; 0 = never. */
+  waiting_card_seconds?: number;
 }
 
 export type TunerSettingsUpdate = Partial<TunerSettings>;

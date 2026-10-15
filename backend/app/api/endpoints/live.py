@@ -17,7 +17,9 @@ Kodi keeps sending them after a redirect and to every segment.
 """
 import asyncio
 import ipaddress
+import threading
 import time
+from collections import OrderedDict
 from urllib.parse import quote, urljoin
 
 from fastapi import APIRouter, Depends, Request
@@ -85,12 +87,60 @@ def _fetch_manifest(url: str, headers: dict, limit: int = MAX_MANIFEST_BYTES):
     raise ValueError('too many redirects')
 
 
+# Kodi opens a channel with two GETs: each starts the relay's ffmpeg, and the
+# second asked the broadcaster again for the master and the first segments
+# the first had just fetched (the other agent counted ~17 requests). What the
+# relay fetched is kept briefly: a segment does not change, a playlist does
+# with every new segment. Bounded, the box has little memory.
+RELAY_CACHE_SEGMENT_SECONDS = 30
+RELAY_CACHE_PLAYLIST_SECONDS = 2
+RELAY_CACHE_MAX_BYTES = 48 * 1024 * 1024
+_relay_cache: "OrderedDict[str, tuple]" = OrderedDict()
+_relay_cache_lock = threading.Lock()
+_relay_fetching: dict = {}
+
+
+def _relay_fetch(url: str, headers: dict):
+    """_fetch_manifest for the relay, through the short cache. A fetch of
+    the same URL already in flight is waited for, not repeated: both
+    ffmpegs ask for the same segments at nearly the same moment."""
+    while True:
+        with _relay_cache_lock:
+            hit = _relay_cache.get(url)
+            if hit is not None:
+                expires, found = hit
+                if time.monotonic() < expires:
+                    _relay_cache.move_to_end(url)
+                    return found
+                del _relay_cache[url]
+            running = _relay_fetching.get(url)
+            if running is None:
+                running = _relay_fetching[url] = threading.Event()
+                break
+        running.wait(OPEN_BUDGET_SECONDS)
+    try:
+        found = _fetch_manifest(url, headers, MAX_SEGMENT_BYTES)
+        playlist = b'#EXTM3U' in found[1][:512]
+        ttl = RELAY_CACHE_PLAYLIST_SECONDS if playlist else RELAY_CACHE_SEGMENT_SECONDS
+        with _relay_cache_lock:
+            _relay_cache[url] = (time.monotonic() + ttl, found)
+            size = sum(len(entry[1][1]) for entry in _relay_cache.values())
+            while size > RELAY_CACHE_MAX_BYTES and len(_relay_cache) > 1:
+                _, (_, (_, body, _)) = _relay_cache.popitem(last=False)
+                size -= len(body)
+        return found
+    finally:
+        with _relay_cache_lock:
+            _relay_fetching.pop(url, None)
+        running.set()
+
+
 def _serve_for_relay(stream_id: str, url: str, headers: dict):
     """Loopback only: what the TV relay's ffmpeg reads (see
     hls_manifest.serve_all). A manifest comes back rewritten; anything else
     -- a segment, a key, an init map -- is passed through as fetched."""
     try:
-        final_url, body, content_type = _fetch_manifest(url, headers, MAX_SEGMENT_BYTES)
+        final_url, body, content_type = _relay_fetch(url, headers)
     except Exception as error:
         return JSONResponse({"detail": f"The origin did not answer: {error}"}, status_code=502)
     if '#EXTM3U' not in body[:512].decode('utf-8', 'replace'):

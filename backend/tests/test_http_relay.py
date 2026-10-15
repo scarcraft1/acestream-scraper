@@ -227,3 +227,70 @@ def test_SIN_R_KODI_SIGUE_COMO_ANTES(relay_live):
     text = client.get('/live/url%3A' + 'f' * 40 + '?u=https%3A%2F%2Frtve%2Ftdp%2Fhd%2Findex.m3u8&s='
                       + __import__('app.services.hls_manifest', fromlist=['sign']).sign('https://rtve/tdp/hd/index.m3u8')).text
     assert 'https://rtve/tdp/hd/seg_8.ts' in text
+
+
+# --- the short cache: Kodi's two GETs ask for the same things -----------------
+
+@pytest.fixture
+def cache(monkeypatch):
+    from app.api.endpoints import live
+    monkeypatch.setattr(live, '_relay_cache', __import__('collections').OrderedDict())
+    monkeypatch.setattr(live, '_relay_fetching', {})
+    origin = Origin({'https://cdn/seg_1.ts': b'G' * 1000, 'https://cdn/index.m3u8': MEDIA})
+    monkeypatch.setattr(live, 'source_get', origin)
+    return live, origin
+
+
+def test_UN_SEGMENTO_SE_PIDE_UNA_VEZ_PARA_LOS_DOS_GET(cache):
+    live, origin = cache
+    assert live._relay_fetch('https://cdn/seg_1.ts', {})[1] == b'G' * 1000
+    assert live._relay_fetch('https://cdn/seg_1.ts', {})[1] == b'G' * 1000
+    assert [url for url, _ in origin.asked] == ['https://cdn/seg_1.ts']
+
+
+def test_UNA_LISTA_CADUCA_ENSEGUIDA(cache, monkeypatch):
+    live, origin = cache
+    clock = [100.0]
+    monkeypatch.setattr(live.time, 'monotonic', lambda: clock[0])
+    live._relay_fetch('https://cdn/index.m3u8', {})
+    clock[0] += 1
+    live._relay_fetch('https://cdn/index.m3u8', {})
+    clock[0] += 2
+    live._relay_fetch('https://cdn/index.m3u8', {})
+    assert len(origin.asked) == 2          # reused within 2 s, fetched again after
+
+
+def test_A_LA_VEZ_SE_ESPERA_A_LA_DESCARGA_EN_CURSO(cache, monkeypatch):
+    import threading
+    import time as real_time
+    live, origin = cache
+    slow = origin.__call__
+
+    def slow_get(url, timeout=None, headers=None):
+        real_time.sleep(0.2)
+        return slow(url, timeout, headers)
+    monkeypatch.setattr(live, 'source_get', slow_get)
+    results = []
+    threads = [threading.Thread(target=lambda: results.append(live._relay_fetch('https://cdn/seg_1.ts', {})[1]))
+               for _ in range(2)]
+    [t.start() for t in threads]
+    [t.join(5) for t in threads]
+    assert results == [b'G' * 1000] * 2
+    assert len(origin.asked) == 1
+
+
+def test_LA_CACHE_TIENE_TOPE(cache, monkeypatch):
+    live, origin = cache
+    monkeypatch.setattr(live, 'RELAY_CACHE_MAX_BYTES', 1500)
+    origin.table['https://cdn/seg_2.ts'] = b'G' * 1000
+    live._relay_fetch('https://cdn/seg_1.ts', {})
+    live._relay_fetch('https://cdn/seg_2.ts', {})
+    assert list(live._relay_cache) == ['https://cdn/seg_2.ts']
+
+
+def test_UN_FALLO_NO_SE_GUARDA(cache):
+    live, origin = cache
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            live._relay_fetch('https://cdn/no-esta.ts', {})
+    assert len(origin.asked) == 2

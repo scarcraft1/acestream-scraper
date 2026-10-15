@@ -226,6 +226,11 @@ committed status and skip channels checked since the scan began or within 30
 seconds. Native engine 3.2.11 was live-tested on 2026-09-06: distinct PIDs do not isolate stop for the same source. Skip sources
 owned by the relay/web player and recheck ownership before cleanup; do not remove
 this protection based on distinct session URLs. See `docs/ops/stream-check-pid.md`.
+The scheduled pass waits between sources while someone watches
+(`services/viewing.py`: a relay claim, a starting/ready web-player session, or a
+player request to `/live/` within 30 s) and gives up after one interval; the
+least-recently-checked order lets the next pass resume. On 2026-10-14 it ran
+next to the match on the box, since it only skipped the playing source.
 
 ## Playback routing
 

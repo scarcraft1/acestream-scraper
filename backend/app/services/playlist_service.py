@@ -5,7 +5,7 @@ import re
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import time
 
 from app.repositories.channel_repository import ChannelRepository
@@ -16,6 +16,13 @@ from app.utils.m3u import m3u_attr
 
 LIVE_MIMETYPE_PROP = '#KODIPROP:mimetype=application/vnd.apple.mpegurl'
 RELAY_MIMETYPE_PROP = '#KODIPROP:mimetype=video/mp2t'
+# Extra group for a channel airing a football match right now, from its
+# football agenda guide (agenda_epg_id). IPTV Simple splits group-title on
+# ';', so the channel shows in its own tab and in this one.
+FOOTBALL_NOW_GROUP = 'Fútbol ahora'
+# A match is «now» from a little before kick-off, when the channel starts its
+# pre-match, until the agenda's end time.
+FOOTBALL_NOW_LEAD = timedelta(minutes=10)
 
 
 class PlaylistService:
@@ -169,6 +176,25 @@ class PlaylistService:
 
         return "\n".join(lines) + "\n"
 
+    def _football_now(self, tv_channels, now: Optional[datetime] = None) -> set:
+        """Ids of the TV channels whose football agenda has a match on now.
+
+        Only channels with an agenda guide (agenda_epg_id) can be in it, and
+        only from an enabled guide source, as in the XMLTV export.
+        """
+        ids = {c.agenda_epg_id: c.id for c in tv_channels if getattr(c, 'agenda_epg_id', None)}
+        if not ids:
+            return set()
+        from app.models.models import EPGChannel, EPGProgram, EPGSource
+        now = now or datetime.now(timezone.utc)
+        rows = (self.db.query(EPGChannel.channel_xml_id)
+                .join(EPGSource, EPGChannel.epg_source_id == EPGSource.id)
+                .join(EPGProgram, EPGProgram.epg_channel_id == EPGChannel.id)
+                .filter(EPGSource.enabled.is_(True), EPGChannel.channel_xml_id.in_(list(ids)),
+                        EPGProgram.start_time <= now + FOOTBALL_NOW_LEAD, EPGProgram.end_time > now)
+                .distinct().all())
+        return {ids[r[0]] for r in rows}
+
     @staticmethod
     def _raw_relay_base(base_url: str) -> str:
         """The relay route for one stream, next to a TV-channel relay format."""
@@ -251,6 +277,7 @@ class PlaylistService:
         per_source adds each source under its relayed channel."""
         lines: List[str] = []
         processed_ids = set()
+        football_now = self._football_now(tv_channels)
 
         for tv_channel in tv_channels:
             streams = [s for s in tv_channel.acestream_channels if s.id]
@@ -297,8 +324,11 @@ class PlaylistService:
                     attrs.append(f'tvg-logo="{self._attr(tv_channel.logo_url)}"')
                 elif stream.logo:
                     attrs.append(f'tvg-logo="{self._attr(stream.logo)}"')
-                if tv_channel.category:
-                    attrs.append(f'group-title="{self._attr(tv_channel.category)}"')
+                groups = [tv_channel.category] if tv_channel.category else []
+                if tv_channel.id in football_now:
+                    groups.append(FOOTBALL_NOW_GROUP)
+                if groups:
+                    attrs.append(f'group-title="{self._attr(";".join(groups))}"')
 
                 lines.append(f'#EXTINF:-1 {" ".join(attrs)},{display_name}')
                 if stable:

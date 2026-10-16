@@ -312,6 +312,14 @@ async def tuner_channel(tv_channel_id: int, request: Request):
         raise APIError(code="NO_ONLINE_STREAMS", message="This channel has no online sources available", status_code=503)
     if request.method == "HEAD":
         return Response(status_code=200, headers=RELAY_HEADERS)
+    key = (request.client.host if request.client else '?', tv_channel_id)
+    if waiting_card.recently(key) == 'end':
+        # Kodi's second GET of a channel its first GET just found dead: the
+        # end card again, without trying the sources, taking a tuner slot
+        # someone zapping elsewhere may need, or opening the engine.
+        return ClosingStreamingResponse(
+            waiting_card.end_card_stream(await run_in_threadpool(waiting_card.load_end_card)),
+            headers=RELAY_HEADERS)
     limit = await run_in_threadpool(_tuner_count)
     label = f"tuner:{request.client.host if request.client else '?'}"
     claim = relay_registry.try_open(candidates[0] if candidates else "", label, limit)
@@ -381,7 +389,7 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             iterator = waiting_card.with_waiting_card(iterator, await run_in_threadpool(waiting_card.load_card),
                                                       after=card_after,
                                                       midstream_after=tuner_playback_service.STALL_SECONDS,
-                                                      key=(request.client.host if request.client else '?', tv_channel_id),
+                                                      key=key,
                                                       end_card=await run_in_threadpool(waiting_card.load_end_card),
                                                       end_errors=(EngineStreamError, EngineUnavailableError,
                                                                   EngineRefusedError))

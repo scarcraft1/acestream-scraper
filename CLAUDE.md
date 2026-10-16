@@ -192,10 +192,19 @@ deadlines stop at once. `services/waiting_card.py`: when no byte has come after
 «Conectando…» card (`app/assets/conectando.ts`, H.264 + AAC silence, paced, never
 looped) and the start budget stretches to the card's length; the first real byte
 is spliced in raw. Óscar: as rarely as possible, never another channel's content.
+Kodi makes its second GET only once the first has data, so what each (client, channel)
+GET did is kept 5 s (`waiting_card.recently`): the second GET shows the card at once
+instead of waiting the threshold again (it came at 40 s, past Kodi's 30 s limit). With
+no source left the route sends an 8 s «Sin señal en este canal» card
+(`app/assets/sin-senal.ts`) and ends cleanly instead of a 502 («Playback failed»); the
+second GET gets it without a tuner slot or the engine.
 New relay or engine-session tests start from `backend/tests/test_kodi_double_get.py`:
 real `EngineClient` against a fake engine, the engine reader, the ranked relay, anyio
 cancellation and the response's shielded close. Tests built on fakes alone missed the
 client's cancellation path, the parked sessions and the engine's empty second session.
+Test the behaviour through the route; assert on `inspect.getsource` only when it cannot
+be driven, saying why in the test (source assertions broke on refactors that kept the
+behaviour, 16-10).
 One reserved relay claim survives failed attempts; startup has per-attempt and total
 deadlines. By default failures after playback starts end the response; client
 reconnections prefer alternatives over sources that failed in the last 60 seconds. Each

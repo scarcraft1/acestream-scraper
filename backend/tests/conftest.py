@@ -756,3 +756,29 @@ def _relay_registry_left_clean():
     if left:
         pytest.fail("test left %d relay claim(s) open: %s" % (
             len(left), ", ".join(f"{i.content_id[:12] or '-'} ({i.client_label})" for i in left)))
+
+
+@pytest.fixture(autouse=True)
+def _process_state_left_clean():
+    """Every test leaves the process-wide scheduler and engine state as it was.
+
+    task_service.shutdown_event: any test that runs the app's lifespan sets it
+    on the way out (five in the suite, legitimately), and a later status-pass
+    test then stopped before checking anything -- red only in the full suite
+    (2026-10-15). It is cleared after every test.
+
+    A deferred engine stop (EngineClient.stop with linger_seconds) still
+    pending would fire into whatever test runs next: that one is a bug in the
+    test, so it is cancelled and the test fails, naming it.
+    """
+    from app.services import playback_ownership
+    from app.services.task_service import task_service
+    yield
+    task_service.shutdown_event.clear()
+    pending = [source for source in list(playback_ownership._sources.values())
+               if source.pending_stop is not None and source.pending_stop.is_alive()]
+    for source in pending:
+        source.pending_stop.cancel()
+        source.pending_stop = None
+    if pending:
+        pytest.fail("test left %d deferred engine stop(s) pending" % len(pending))

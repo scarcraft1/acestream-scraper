@@ -192,6 +192,10 @@ deadlines stop at once. `services/waiting_card.py`: when no byte has come after
 «Conectando…» card (`app/assets/conectando.ts`, H.264 + AAC silence, paced, never
 looped) and the start budget stretches to the card's length; the first real byte
 is spliced in raw. Óscar: as rarely as possible, never another channel's content.
+New relay or engine-session tests start from `backend/tests/test_kodi_double_get.py`:
+real `EngineClient` against a fake engine, the engine reader, the ranked relay, anyio
+cancellation and the response's shielded close. Tests built on fakes alone missed the
+client's cancellation path, the parked sessions and the engine's empty second session.
 One reserved relay claim survives failed attempts; startup has per-attempt and total
 deadlines. By default failures after playback starts end the response; client
 reconnections prefer alternatives over sources that failed in the last 60 seconds. Each

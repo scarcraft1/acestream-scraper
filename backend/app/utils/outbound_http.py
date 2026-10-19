@@ -102,11 +102,10 @@ class PinnedHTTPAdapter(HTTPAdapter):
         return self._connection(url)
 
     def add_headers(self, request, **kwargs):
-        # Host goes FIRST, where an ordinary client puts it. Appended after
-        # requests' default headers, Dailymotion's CDN answered 403 to the
-        # same request a plain `requests.get` got 200 for (7 TV La Rioja,
-        # 15-10): the connection goes to a pinned address, so urllib3 does
-        # not add Host itself.
+        # Host goes FIRST, where an ordinary client puts it. The connection
+        # goes to a pinned address, so urllib3 does not add Host itself;
+        # appended after requests' default headers, Dailymotion's CDN answered
+        # 403 to the same request a plain `requests.get` got 200 for.
         others = [(key, value) for key, value in request.headers.items() if key.lower() != 'host']
         request.headers.clear()
         request.headers['Host'] = urlsplit(request.url).netloc.rsplit('@', 1)[-1]

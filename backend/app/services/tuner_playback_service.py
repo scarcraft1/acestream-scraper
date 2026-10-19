@@ -124,7 +124,7 @@ async def relay_ranked_streams(
             else:
                 raw = relay_engine_stream(engine, content_id, client_label, registry=registry,
                     client_factory=client_factory, claim=claim, release_claim=False,
-                    stop_linger=stop_linger)
+                    stop_linger=stop_linger, read_seconds=attempt_seconds)
             iterator = remux_source(raw, version=version, offset=time.monotonic() - started) if experimental_transcoding else raw
             version += 1
             first_at = last_at = None

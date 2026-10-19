@@ -226,7 +226,9 @@ async def lifespan(app: FastAPI):
             task_service.add_interval_task(run_media_server_sync_task, seconds=600, job_id="media_server_sync")  # every 10 min
             # A machine that is only on for a few hours never reaches a 6 h or
             # 24 h interval counted from startup. See catch_up_missed_runs.
-            task_service.catch_up_missed_runs()
+            # Not at once: the first minutes after power-on are when channels
+            # are opened, and the guide refresh locks SQLite (18-10).
+            task_service.catch_up_missed_runs(start_after_seconds=300)
             # channel_status opens the engine, so not at startup: a quarter of
             # an hour later, and only if it is still overdue then.
             task_service.catch_up_later("channel_status", delay_seconds=900)

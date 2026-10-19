@@ -282,7 +282,7 @@ class TaskService:
     CATCH_UP_JOBS = ("epg_refresh", "url_scraping")
 
     def catch_up_missed_runs(self, job_ids=CATCH_UP_JOBS, stagger_seconds: int = 300,
-                             now: Optional[datetime] = None) -> list:
+                             now: Optional[datetime] = None, start_after_seconds: int = 0) -> list:
         """Run now the jobs whose last run is older than their interval.
 
         Interval jobs live in memory and are re-created on every start, so
@@ -296,6 +296,11 @@ class TaskService:
         04:00 wants 04:00. Jobs are staggered so a small box does not fetch
         playlists and guides at once.
 
+        ``start_after_seconds`` holds the first one back: right after power-on
+        is when someone opens a channel, and the guide refresh writes thousands
+        of rows -- on a box (18-10) two channel opens at 2 min failed with
+        «database is locked» while it ran.
+
         Returns the job ids that were brought forward.
         """
         now = now or datetime.now(timezone.utc)
@@ -304,7 +309,7 @@ class TaskService:
             overdue, last, interval = self._overdue(job_id, now)
             if not overdue:
                 continue
-            when = now + timedelta(seconds=stagger_seconds * len(brought))
+            when = now + timedelta(seconds=start_after_seconds + stagger_seconds * len(brought))
             self.scheduler.modify_job(job_id, next_run_time=when)
             self.logger.info(
                 "Catching up task '%s' (last run %s, interval %ss): runs at %s",

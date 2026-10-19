@@ -126,3 +126,13 @@ def test_CON_HORA_FIJA_TAMPOCO_SE_PROGRAMA(servicio):
     servicio.configure_schedule(ScheduleAnchors(channel_status="04:00"))
     _registra(servicio, "channel_status", H, None)
     assert not servicio.catch_up_later("channel_status", delay_seconds=900, now=AHORA)
+
+
+def test_AL_ENCENDER_LA_GUIA_ESPERA_LO_PEDIDO(servicio):
+    """Right after power-on is when channels are opened, and the guide
+    refresh locks SQLite (18-10): the first catch-up waits."""
+    _registra(servicio, "url_scraping", 24 * H, None)
+    _registra(servicio, "epg_refresh", 6 * H, None)
+    assert servicio.catch_up_missed_runs(now=AHORA, start_after_seconds=300) == ["epg_refresh", "url_scraping"]
+    assert _siguiente(servicio, "epg_refresh") == AHORA + timedelta(seconds=300)
+    assert _siguiente(servicio, "url_scraping") == AHORA + timedelta(seconds=600)

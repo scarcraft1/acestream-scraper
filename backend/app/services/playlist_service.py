@@ -403,7 +403,14 @@ class PlaylistService:
         # remote dead for 13 s while it probed the type, 0 s with this line;
         # a live one showed video at 5.5 s instead of 8.5 s (kodi-53, bank
         # engine). Other link formats are the user's and may be anything.
-        if '/tuner/channel/' in link or '/tuner/stream/' in link:
+        # Only real HTTP relay paths (upstream 84ce59a): a user's link that
+        # merely contains the words must not get the hint.
+        try:
+            parts = urlsplit(link)
+        except ValueError:
+            return [link]
+        if (parts.scheme in ('http', 'https') and parts.netloc
+                and re.search(r'/tuner/(?:channel|stream)/[^/]+\.ts$', parts.path)):
             return [RELAY_MIMETYPE_PROP, link]
         return [link]
 

@@ -242,7 +242,11 @@ and does not alter another viewer's session or a remote player's raw source URL.
 editable in Settings and applied to APScheduler immediately. Stable tuner channel
 GETs queue a coalesced, bounded background refresh through `tuner_probe_service`;
 newly online candidates join the recovery budget. Active TV relays repeat refreshes
-every 60 seconds and after failures, retaining the shared queue and ownership guards. HEAD and raw
+every 60 seconds and after failures, retaining the shared queue and ownership guards.
+A refresh checks at most `PLAYBACK_REFRESH_LIMIT` (3) sources in the relay's order,
+skips those checked in the last `PLAYBACK_REFRESH_MIN_AGE_SECONDS` (600) and the one
+playing, and ends when the channel's viewer leaves (`stop_channel`): checking every
+source on each pass cost half as much CPU again on the bench (20-10). HEAD and raw
 content-ID relay URLs do not launch refreshes. Browser playback of an assigned
 stream also queues a TV-channel refresh. Status probes share one global priority
 queue (TV playback, individual manual, then scheduled/bulk), with a two-second cooldown after cleanup and a ten-second

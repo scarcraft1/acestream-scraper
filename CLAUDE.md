@@ -199,6 +199,9 @@ The current product already points toward a structured operational dashboard: Ma
 offline, with bitrate ordering within each group. Recent explicit offline results
 are excluded. Freshness covers the last six hours; future timestamps are stale.
 Recent relay failures still deprioritize a source.
+Within each group an official HTTP source goes first, then
+`stream_ranking.stream_language_rank` (Castilian, no evidence, then other languages and
+Latin American Spanish; nothing is dropped), then bitrate.
 One reserved relay claim survives failed attempts; startup has per-attempt and total
 deadlines. By default failures after playback starts end the response; client
 reconnections prefer alternatives over sources that failed in the last 60 seconds. Each

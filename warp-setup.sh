@@ -163,6 +163,39 @@ for host in ${exclude_hosts//,/ }; do
     fi
 done
 
+# Helpers that must survive warp-svc restarts. `configure` runs again after
+# every restart, so each helper is started only if its last copy is gone.
+WARP_SCRIPTS_DIR=${WARP_SCRIPTS_DIR:-$(dirname "$0")}
+WARP_RUN_DIR=${WARP_RUN_DIR:-/run}
+start_once() {
+    local name=$1
+    shift
+    local pidfile="$WARP_RUN_DIR/warp-$name.pid"
+    local pid
+    pid=$(cat "$pidfile" 2>/dev/null || true)
+    # A zombie still answers kill -0: read its state instead.
+    if [ -n "$pid" ] && [ -r "/proc/$pid/stat" ] &&
+        [ "$(sed 's/.*) //' "/proc/$pid/stat" | cut -d' ' -f1)" != Z ]; then
+        return 0
+    fi
+    nohup "$@" >> "$WARP_LOG" 2>&1 &
+    echo $! > "$pidfile"
+    log "Started WARP helper $name"
+}
+
+# Tunnel mode drops inbound connections from public addresses (#93): the
+# engine's P2P port and remote access stop working. warp-inbound.sh keeps
+# them out of the tunnel and re-allows them after each WARP reconnect.
+if [ "$(normalize_bool "${WARP_ALLOW_INBOUND:-false}")" = "true" ]; then
+    start_once inbound sh "$WARP_SCRIPTS_DIR/warp-inbound.sh"
+fi
+
+# A SOCKS5 port whose traffic leaves through the tunnel, for programs outside
+# the container (warp-cli's proxy mode would switch the tunnel off instead).
+if [ -n "${WARP_SOCKS_PORT:-}" ]; then
+    start_once socks python3 "$WARP_SCRIPTS_DIR/warp-socks.py" --port "$WARP_SOCKS_PORT"
+fi
+
 log "Checking WARP status"
 warp-cli --accept-tos status >> "$WARP_LOG" 2>&1
 log "WARP initialization completed"

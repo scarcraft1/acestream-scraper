@@ -40,6 +40,11 @@ def run_configure(tmp_path, **extra_env):
         "open(os.path.join(os.environ['WARP_TEST_DIR'], 'started'), 'a')"
         ".write('socks ' + ' '.join(sys.argv[1:]) + '\\n')\n"
         "time.sleep(30)\n")
+    (scripts / "tcp-forward.py").write_text(
+        "import os, sys, time\n"
+        "open(os.path.join(os.environ['WARP_TEST_DIR'], 'started'), 'a')"
+        ".write('forward ' + ' '.join(sys.argv[1:]) + '\\n')\n"
+        "time.sleep(30)\n")
     env = {
         **os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
         "WARP_TEST_DIR": str(tmp_path), "LOG_DIR": str(tmp_path / "logs"),
@@ -81,15 +86,16 @@ def test_no_helpers_by_default(tmp_path):
 
 
 def test_helpers_start_once_across_reconfigures(tmp_path):
-    env = {"WARP_ALLOW_INBOUND": "true", "WARP_SOCKS_PORT": "1080"}
+    env = {"WARP_ALLOW_INBOUND": "true", "WARP_SOCKS_PORT": "1080", "TOR_SOCKS_PORT": "9150"}
     try:
         for _ in range(3):  # configure runs again after every warp-svc restart
             result, run_dir = run_configure(tmp_path, **env)
             assert result.returncode == 0, result.stderr
-        lines = started(tmp_path, 2)
+        lines = started(tmp_path, 3)
         time.sleep(0.3)  # a duplicate would show up here
-        lines = started(tmp_path, 2)
-        assert sorted(lines) == ["inbound", "socks --port 1080"]
+        lines = started(tmp_path, 3)
+        assert sorted(lines) == ["forward --port 9150 --to 127.0.0.1:9050", "inbound",
+                                 "socks --port 1080"]
     finally:
         kill_helpers(tmp_path / "run")
 
@@ -190,5 +196,37 @@ def test_socks_reports_refused_and_unsupported_commands():
 
 def test_dockerfile_fork_installs_the_helpers():
     text = (ROOT / "Dockerfile.fork").read_text()
-    for name in ("warp-setup.sh", "warp-inbound.sh", "warp-socks.py"):
+    for name in ("warp-setup.sh", "warp-inbound.sh", "warp-socks.py", "tcp-forward.py"):
         assert name in text, name
+
+
+def test_tcp_forward_relays_bytes():
+    spec = importlib.util.spec_from_file_location("tcp_forward", ROOT / "docker" / "scripts" / "tcp-forward.py")
+    tcp_forward = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tcp_forward)
+
+    async def scenario():
+        async def echo(reader, writer):
+            writer.write(b"echo:" + await reader.read(100))
+            await writer.drain()
+            writer.close()
+
+        target = await asyncio.start_server(echo, "127.0.0.1", 0)
+        target_port = target.sockets[0].getsockname()[1]
+        fwd = await asyncio.start_server(tcp_forward.handler("127.0.0.1", target_port), "127.0.0.1", 0)
+        fwd_port = fwd.sockets[0].getsockname()[1]
+
+        def client():
+            s = socket.create_connection(("127.0.0.1", fwd_port), timeout=5)
+            s.sendall(b"hola")
+            data = s.recv(100)
+            s.close()
+            return data
+
+        try:
+            assert await asyncio.to_thread(client) == b"echo:hola"
+        finally:
+            target.close()
+            fwd.close()
+
+    asyncio.run(scenario())

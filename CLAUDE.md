@@ -171,8 +171,10 @@ The current product already points toward a structured operational dashboard: Ma
 
 `services/tuner_playback_service.py` tries the active, valid sources returned by
 `TunerService.relay_stream_ids()`: online and checked within `FRESH_CHECK_HOURS`, then
-online from an older check, then never checked or offline from an older check, each
-group by descending `bitrate_bps`; only a recent offline verdict is left out. The relay
+online from an older check, then never checked or offline from an older check; within
+each group an official HTTP source first, then `stream_ranking.stream_language_rank`
+(Castilian, no evidence, then other languages and Latin American Spanish; nothing is
+dropped), then descending `bitrate_bps`; only a recent offline verdict is left out. The relay
 records its own verdicts (`record_playback_result`): healthy after `HEALTHY_SECONDS` of
 delivery, offline when a source fails before that. Healthy time ends at end of stream,
 or at the last chunk when a source stalls (the stall wait is not delivery).

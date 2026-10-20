@@ -389,6 +389,9 @@ COPY --link backend/capture_logs.py /usr/local/bin/capture_logs.py
 COPY --link backend/engine_cache_cleanup.py /usr/local/bin/engine_cache_cleanup.py
 COPY --link backend/gluetun_port.py /usr/local/bin/gluetun_port.py
 COPY --link --chmod=755 warp-setup.sh /usr/local/bin/warp-setup.sh
+# WARP's optional helpers (WARP_ALLOW_INBOUND, WARP_SOCKS_PORT): warp-setup.sh
+# starts them from its own directory, so they sit next to it.
+COPY --link --chmod=755 docker/scripts/warp-inbound.sh docker/scripts/warp-socks.py /usr/local/bin/
 COPY --link --chmod=755 healthcheck.sh /usr/local/bin/healthcheck.sh
 
 # Linked copies keep each payload reusable when a preceding layer changes.

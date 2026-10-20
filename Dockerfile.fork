@@ -37,7 +37,7 @@ COPY backend/migrations /app/migrations
 # and refuses to start without it.
 COPY version.txt /app/version.txt
 COPY --from=interface /src/dist/ /app/frontend_build/
-# WARP's optional helpers (WARP_ALLOW_INBOUND, WARP_SOCKS_PORT): warp-setup.sh
+# WARP's optional helpers (WARP_ALLOW_INBOUND, WARP_SOCKS_PORT, TOR_SOCKS_PORT): warp-setup.sh
 # starts them from its own directory, so they sit next to it.
-COPY warp-setup.sh docker/scripts/warp-inbound.sh docker/scripts/warp-socks.py /usr/local/bin/
-RUN chmod 0755 /usr/local/bin/warp-setup.sh /usr/local/bin/warp-inbound.sh /usr/local/bin/warp-socks.py
+COPY warp-setup.sh docker/scripts/warp-inbound.sh docker/scripts/warp-socks.py docker/scripts/tcp-forward.py /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/warp-setup.sh /usr/local/bin/warp-inbound.sh /usr/local/bin/warp-socks.py /usr/local/bin/tcp-forward.py

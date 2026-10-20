@@ -243,8 +243,8 @@ editable in Settings and applied to APScheduler immediately. Stable tuner channe
 GETs queue a coalesced, bounded background refresh through `tuner_probe_service`;
 newly online candidates join the recovery budget. Active TV relays repeat refreshes
 every 60 seconds and after failures, retaining the shared queue and ownership guards.
-A refresh checks at most `PLAYBACK_REFRESH_LIMIT` (3) sources in the relay's order,
-skips those checked in the last `PLAYBACK_REFRESH_MIN_AGE_SECONDS` (600) and the one
+A refresh looks at the first `PLAYBACK_REFRESH_LIMIT` (3) sources the relay would try next,
+checks those not checked in the last `PLAYBACK_REFRESH_MIN_AGE_SECONDS` (600; then a pass checks nothing), leaves out the one
 playing, and ends when the channel's viewer leaves (`stop_channel`): checking every
 source on each pass cost half as much CPU again on the bench (20-10). HEAD and raw
 content-ID relay URLs do not launch refreshes. Browser playback of an assigned

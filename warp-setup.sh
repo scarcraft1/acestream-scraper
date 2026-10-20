@@ -179,6 +179,13 @@ if [ -n "${WARP_SOCKS_PORT:-}" ]; then
     start_once socks python3 "$WARP_SCRIPTS_DIR/warp-socks.py" --port "$WARP_SOCKS_PORT"
 fi
 
+# The embedded Tor only listens on the container's loopback. TOR_SOCKS_PORT
+# exposes it on another container port so it can be published as well (it
+# cannot be 9050 itself: Tor already holds 127.0.0.1:9050).
+if [ -n "${TOR_SOCKS_PORT:-}" ]; then
+    start_once tor-forward python3 "$WARP_SCRIPTS_DIR/tcp-forward.py" --port "$TOR_SOCKS_PORT" --to 127.0.0.1:9050
+fi
+
 log "Checking WARP status"
 warp-cli --accept-tos status >> "$WARP_LOG" 2>&1
 log "WARP initialization completed"

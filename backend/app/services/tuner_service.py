@@ -18,7 +18,7 @@ from app.repositories.channel_repository import ChannelRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.services.epg_service import EPGService
 from app.services.stream_history import scores_for
-from app.services.stream_ranking import preference_key, sort_streams_curated
+from app.services.stream_ranking import preference_key, sort_streams_curated, stream_language_rank
 from app.utils.m3u import m3u_attr
 
 # libhdhomerun's device-id checksum table, verbatim.
@@ -232,7 +232,14 @@ class TunerService:
             if past is not None and past.demoted:
                 bucket = 3
             score = past.score if past is not None else 0.5
-            ranked.append((*preference_key(stream), bucket, -score, -(stream.bitrate_bps or 0), stream.id.lower()))
+            # Within a group an official HTTP source goes first: it opens in
+            # about a second, an acestream in 3 to 17 s on an A55 box. Then
+            # Castilian, and other languages or Latin American Spanish last
+            # (stream_language_rank), then the playback history score, before
+            # bitrate. A saved preference (#267) still comes before all of it.
+            http = stream.id.startswith("url:")
+            ranked.append((*preference_key(stream), bucket, not http, stream_language_rank(stream),
+                           -score, -(stream.bitrate_bps or 0), stream.id.lower()))
         return list(dict.fromkeys(row[-1] for row in sorted(ranked)))
 
     # --- lineup -------------------------------------------------------------

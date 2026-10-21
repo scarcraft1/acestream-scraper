@@ -257,6 +257,7 @@ interface NumberRange {
 const TUNER_COUNT_RANGE: NumberRange = { min: 1, max: 16 };
 const MAX_CHANNELS_RANGE: NumberRange = { min: 1, max: 1000 };
 const START_SECONDS_RANGE: NumberRange = { min: 5, max: 180 };
+const WAITING_CARD_RANGE: NumberRange = { min: 0, max: 28 };
 
 /** The two numbers stay text while editing so a cleared field stays cleared instead of turning into 0. */
 interface TunerFormState {
@@ -268,6 +269,7 @@ interface TunerFormState {
   experimental_transcoding: boolean;
   source_start_seconds: string;
   startup_budget_seconds: string;
+  waiting_card_seconds: string;
 }
 
 const rangeError = (value: string, { min, max }: NumberRange): string | null => {
@@ -283,8 +285,9 @@ const toForm = (settings: TunerSettings): TunerFormState => ({
   only_online: settings.only_online,
   plex_compatible_audio: settings.plex_compatible_audio ?? false,
   experimental_transcoding: settings.experimental_transcoding ?? false,
-  source_start_seconds: String(settings.source_start_seconds ?? 15),
-  startup_budget_seconds: String(settings.startup_budget_seconds ?? 45),
+  source_start_seconds: String(settings.source_start_seconds ?? 20),
+  startup_budget_seconds: String(settings.startup_budget_seconds ?? 28),
+  waiting_card_seconds: String(settings.waiting_card_seconds ?? 20),
 });
 
 /** Friendly name, stream cap and lineup size the tuner reports to Jellyfin and Plex. */
@@ -301,7 +304,9 @@ const TunerSettingsBlock: React.FC<{ notify: MediaServerNotify }> = ({ notify })
   const channelsError = form ? rangeError(form.max_channels, MAX_CHANNELS_RANGE) : null;
   const sourceStartError = form ? rangeError(form.source_start_seconds, START_SECONDS_RANGE) : null;
   const budgetError = form ? rangeError(form.startup_budget_seconds, START_SECONDS_RANGE) : null;
-  const canSave = form !== null && countError === null && channelsError === null && sourceStartError === null && budgetError === null;
+  const cardError = form ? rangeError(form.waiting_card_seconds, WAITING_CARD_RANGE) : null;
+  const canSave = form !== null && countError === null && channelsError === null && sourceStartError === null
+    && budgetError === null && cardError === null;
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -316,6 +321,7 @@ const TunerSettingsBlock: React.FC<{ notify: MediaServerNotify }> = ({ notify })
         experimental_transcoding: form.experimental_transcoding,
         source_start_seconds: Number(form.source_start_seconds),
         startup_budget_seconds: Number(form.startup_budget_seconds),
+        waiting_card_seconds: Number(form.waiting_card_seconds),
       });
       notify('Tuner settings saved.', 'success');
     } catch (err) {
@@ -386,6 +392,17 @@ const TunerSettingsBlock: React.FC<{ notify: MediaServerNotify }> = ({ notify })
               inputProps={{ 'aria-label': 'Seconds to start a channel', min: START_SECONDS_RANGE.min, max: START_SECONDS_RANGE.max, step: 1 }}
               error={budgetError !== null}
               helperText={budgetError ?? 'Total for all its sources. Keep it under the player timeout: Kodi gives up after about 30 s.'}
+              fullWidth
+            />
+            <TextField
+              size="small"
+              type="number"
+              label="Seconds before “Connecting…”"
+              value={form?.waiting_card_seconds ?? ''}
+              onChange={(event) => setForm((prev) => (prev ? { ...prev, waiting_card_seconds: event.target.value } : prev))}
+              inputProps={{ 'aria-label': 'Seconds before the waiting card', min: WAITING_CARD_RANGE.min, max: WAITING_CARD_RANGE.max, step: 1 }}
+              error={cardError !== null}
+              helperText={cardError ?? 'A channel still dark after this shows “Connecting…” while more sources are tried. 0 turns it off.'}
               fullWidth
             />
           </Stack>

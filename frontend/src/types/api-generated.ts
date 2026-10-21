@@ -4913,6 +4913,12 @@ export interface components {
       startup_budget_seconds?: number;
       /** Tuner Count */
       tuner_count: number;
+      /**
+       * Waiting Card Seconds
+       * @description Seconds without video before a «Conectando…» card is sent while more sources are tried; 0 = never
+       * @default 20
+       */
+      waiting_card_seconds?: number;
     };
     /** TunerSettingsUpdate */
     TunerSettingsUpdate: {
@@ -4932,6 +4938,8 @@ export interface components {
       startup_budget_seconds?: number | null;
       /** Tuner Count */
       tuner_count?: number | null;
+      /** Waiting Card Seconds */
+      waiting_card_seconds?: number | null;
     };
     /** TunerStatusResponse */
     TunerStatusResponse: {

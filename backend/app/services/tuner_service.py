@@ -210,9 +210,12 @@ class TunerService:
         return list(dict.fromkeys(stream.id.lower() for stream in valid))
 
     def relay_stream_ids(self, tv_channel_id: int) -> List[str]:
-        """Saved preferences first among eligible sources; otherwise online and checked recently;
-        online from an old check; then never checked, or offline from an old
-        check. Only a source found offline recently is left out.
+        """What the TV relay tries, in order: first the sources the user
+        ordered for this channel (#267), in that order; then the rest, sources
+        seen online (recently or not) before never checked or offline from an
+        old check. Within each, official HTTP first, then by language
+        (Castilian first), then a recent check, then bitrate. Only a source
+        found offline recently is left out, even if the user ordered it.
 
         When a box that is only on now and then is switched on for a match,
         every status is hours or days old, and the source that is live tonight may be the one the
@@ -229,18 +232,23 @@ class TunerService:
                 continue
             fresh = _checked_since(stream, fresh_since, now)
             if stream.is_online:
-                bucket = 0 if fresh else 1
+                group = 0
             elif stream.is_online is False and fresh:
                 continue
             else:
-                bucket = 2
-            # Within a group an official HTTP source goes first: it opens in
-            # about a second, an acestream in 3 to 17 s on an A55 box. Then
-            # Castilian, and other languages or Latin American Spanish last
-            # (stream_language_rank), before bitrate. A saved preference (#267)
-            # still comes before all of it.
+                group = 1
+            # A saved preference (#267) comes before all of what follows: the
+            # user's order for this channel is the relay's order. Then, among
+            # sources seen online, recent or not, the language decides before
+            # freshness (Óscar, 20-10): on Eurosport 1 the only source checked
+            # that day was Russian and an unmarked one had been online the day
+            # before. If that one is gone, the relay moves on after one
+            # attempt. Within that: an official HTTP source first (it opens in
+            # about a second, an acestream in 3 to 17 s on an A55 box), then
+            # Castilian, unmarked, other languages and Latino
+            # (stream_language_rank), then a recent check, then bitrate.
             http = stream.id.startswith("url:")
-            ranked.append((*preference_key(stream), bucket, not http, stream_language_rank(stream),
+            ranked.append((*preference_key(stream), group, not http, stream_language_rank(stream), not fresh,
                            -(stream.bitrate_bps or 0), stream.id.lower()))
         return list(dict.fromkeys(row[-1] for row in sorted(ranked)))
 

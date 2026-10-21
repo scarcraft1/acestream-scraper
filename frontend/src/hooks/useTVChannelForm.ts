@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TVChannel, TVChannelCreate, TVChannelUpdate } from '../types/tvChannelTypes';
 import { channelNumberPayload } from '../utils/channelNumber';
+import { guideSourcePayload } from '../components/GuideSourceField';
 
 export type TVChannelFormErrors = {
   name?: string;
@@ -57,6 +58,7 @@ export const useTVChannelForm = () => {
       epg_id: channel.epg_id || '',
       agenda_epg_id: channel.agenda_epg_id || '',
       channel_number: channel.channel_number,
+      epg_source_id: channel.epg_source_id ?? null,
     });
     setOpenEditDialog(true);
   };
@@ -80,6 +82,7 @@ export const useTVChannelForm = () => {
     language: sanitizeTextInput(formData.language),
     epg_id: 'epg_id' in formData ? sanitizeTextInput(formData.epg_id) : undefined,
     channel_number: channelNumberPayload(formData.channel_number),
+    ...('epg_source_id' in formData ? { epg_source_id: guideSourcePayload(formData.epg_source_id) } : {}),
     // Sent as null when emptied, so clearing the field removes the agenda
     // instead of being silently ignored.
     agenda_epg_id: 'agenda_epg_id' in formData

@@ -16,7 +16,9 @@ The playback headers travel in the playlist entry (`url|Referer=...`);
 Kodi keeps sending them after a redirect and to every segment.
 """
 import asyncio
+import ipaddress
 import time
+from collections import OrderedDict
 from urllib.parse import quote, urljoin
 
 from fastapi import APIRouter, Depends, Request
@@ -107,6 +109,133 @@ async def _serve_manifest(stream_id: str, url: str, headers: dict, root_path: st
     return Response(content=served.encode('utf-8'), media_type=HLS_TYPE)
 
 
+# --- what the TV relay's ffmpeg reads (app.services.http_relay) -------------
+# The upstream image's ffmpeg has no TLS, so the relay reads everything from
+# here over loopback: manifests rewritten to point back at us, and segments,
+# keys and init maps fetched from the origin with the stream's headers.
+# A segment is a few seconds of video: a few MB at 1080p.
+MAX_SEGMENT_BYTES = 64 * 1024 * 1024
+# Kodi opens a channel with two GETs: each starts the relay's ffmpeg, and the
+# second asked the origin again for the master and the first segments the
+# first had just fetched. What the relay fetched is kept briefly: a segment
+# does not change, a playlist does with every new segment. Bounded: a small
+# box has little memory.
+RELAY_CACHE_SEGMENT_SECONDS = 30
+RELAY_CACHE_PLAYLIST_SECONDS = 2
+RELAY_CACHE_MAX_BYTES = 48 * 1024 * 1024
+_relay_cache: "OrderedDict[str, tuple]" = OrderedDict()
+_relay_fetching: dict = {}
+
+
+async def _fetch_whole(url: str, headers: dict):
+    """(final URL, body, content type) of a manifest or a whole segment,
+    following redirects through the guarded client."""
+    deadline = time.monotonic() + OPEN_BUDGET_SECONDS
+    for _ in range(MAX_REDIRECTS + 1):
+        response = await source_get(url, timeout=deadline - time.monotonic(), headers=headers,
+                                    max_bytes=MAX_SEGMENT_BYTES)
+        if response.status_code in (301, 302, 303, 307, 308) and response.headers.get('Location'):
+            url = urljoin(url, response.headers['Location'])
+            continue
+        response.raise_for_status()
+        return url, response.content, response.headers.get('Content-Type') or ''
+    raise ValueError('too many redirects')
+
+
+async def _relay_fetch(url: str, headers: dict):
+    """_fetch_whole through the short cache. A fetch of the same URL already
+    in flight is waited for, not repeated: both ffmpegs ask for the same
+    segments at nearly the same moment."""
+    while True:
+        hit = _relay_cache.get(url)
+        if hit is not None:
+            expires, found = hit
+            if time.monotonic() < expires:
+                _relay_cache.move_to_end(url)
+                return found
+            del _relay_cache[url]
+        running = _relay_fetching.get(url)
+        if running is None:
+            running = _relay_fetching[url] = asyncio.Event()
+            break
+        try:
+            await asyncio.wait_for(running.wait(), OPEN_BUDGET_SECONDS)
+        except asyncio.TimeoutError:
+            pass
+    try:
+        found = await _fetch_whole(url, headers)
+        playlist = b'#EXTM3U' in found[1][:512]
+        ttl = RELAY_CACHE_PLAYLIST_SECONDS if playlist else RELAY_CACHE_SEGMENT_SECONDS
+        _relay_cache[url] = (time.monotonic() + ttl, found)
+        size = sum(len(entry[1][1]) for entry in _relay_cache.values())
+        while size > RELAY_CACHE_MAX_BYTES and len(_relay_cache) > 1:
+            _, (_, (_, body, _)) = _relay_cache.popitem(last=False)
+            size -= len(body)
+        return found
+    finally:
+        _relay_fetching.pop(url, None)
+        running.set()
+
+
+async def _serve_for_relay(stream_id: str, url: str, headers: dict):
+    """A manifest comes back rewritten (hls_manifest.serve_all); anything
+    else -- a segment, a key, an init map -- is passed through as fetched."""
+    try:
+        final_url, body, content_type = await _relay_fetch(url, headers)
+    except Exception:
+        return JSONResponse({"detail": "The origin did not answer"}, status_code=502)
+    if b'#EXTM3U' not in body[:512]:
+        return Response(content=body, media_type=content_type or 'application/octet-stream')
+
+    def link(absolute_url: str) -> str:
+        return (f"/live/{quote(stream_id, safe='')}?r=1&u={quote(absolute_url, safe='')}"
+                f"&s={hls_manifest.sign(absolute_url)}")
+
+    try:
+        served = hls_manifest.serve_all(body.decode('utf-8', 'replace'), final_url, link)
+    except ValueError:
+        return JSONResponse({"detail": "The origin returned an unsupported manifest"}, status_code=502)
+    return Response(content=served.encode('utf-8'), media_type=HLS_TYPE)
+
+
+def _is_loopback(request: Request) -> bool:
+    host = request.client.host if request.client else ''
+    try:
+        return ipaddress.ip_address(host.strip('[]')).is_loopback
+    except ValueError:
+        return False
+
+
+async def _open_for_relay(stream_id: str, stream_url, stream_headers: dict, request: Request):
+    if not _is_loopback(request):
+        return JSONResponse({"detail": "Only the relay on this server"}, status_code=403)
+    provider = live_providers.for_stream_url(stream_url)
+    if provider is not None:
+        # The provider's current playback headers win over the ones stored at
+        # import: 7 TV La Rioja's changed and a stored Referer went stale.
+        stream_headers = {**stream_headers, **getattr(provider, 'PLAY_HEADERS', {})}
+    nested = request.query_params.get("u")
+    if nested is not None:
+        if not hls_manifest.is_signed(nested, request.query_params.get("s", "")):
+            return JSONResponse({"detail": "Unsigned URL"}, status_code=403)
+        url = nested
+    elif provider is not None:
+        try:
+            url = await asyncio.wait_for(_resolve_once(stream_url), OPEN_BUDGET_SECONDS)
+        except asyncio.TimeoutError:
+            url = None
+        if not url:
+            return JSONResponse({"detail": "The broadcaster did not return a live link"}, status_code=502)
+    elif str(stream_url or '').lower().startswith(('http://', 'https://')):
+        url = stream_url
+    else:
+        return JSONResponse({"detail": "Not an HTTP stream"}, status_code=404)
+    try:
+        return await asyncio.wait_for(_serve_for_relay(stream_id, url, stream_headers), OPEN_BUDGET_SECONDS)
+    except asyncio.TimeoutError:
+        return JSONResponse({"detail": "The origin did not answer in time"}, status_code=502)
+
+
 @live_router.api_route("/{stream_id}", methods=["GET", "HEAD"], include_in_schema=False)
 async def open_live_stream(stream_id: str, request: Request, db: Session = Depends(get_db)):
     def load_stream():
@@ -116,6 +245,8 @@ async def open_live_stream(stream_id: str, request: Request, db: Session = Depen
         finally:
             db.close()
     stream_url, stream_headers = await run_in_threadpool(load_stream)
+    if request.query_params.get("r") == "1":
+        return await _open_for_relay(stream_id, stream_url, stream_headers, request)
     # Errors are answered as JSON here: a 404 raised as an exception would
     # reach the SPA fallback and come back as index.html with HTTP 200.
     if hls_manifest.needs_manifest(stream_url, stream_headers):

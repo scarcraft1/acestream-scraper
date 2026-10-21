@@ -39,6 +39,7 @@ WINDOW = 10
 # `URI="..."` appears in encryption keys, alternative audio and init maps;
 # left alone, those requests would bypass us.
 _URI = re.compile(r'(URI=")([^"]+)(")')
+_SUBTITLES = re.compile(r',?SUBTITLES="[^"]*"')
 
 
 def needs_manifest(stream_url, stream_headers) -> bool:
@@ -175,3 +176,29 @@ def serve(text: str, origin: str, link, window: int = WINDOW) -> str:
         return rewrite_master(text, origin, link)
     return prune(text, origin, window)
 
+
+def serve_all(text: str, origin: str, link, window: int = WINDOW) -> str:
+    """For the TV relay's ffmpeg: every URL back through us, segments, keys
+    and init maps included.
+
+    The relay's ffmpeg (the upstream image's minimal build) has no TLS: it
+    reads everything from us over loopback HTTP, and we fetch from the origin
+    with the stream's headers. ffmpeg still does what a player does with the
+    stream -- alternative audio, AES keys, fMP4 -- and copies it to MPEG-TS.
+    """
+    if is_master(text):
+        # Without subtitles: the relay drops them anyway (-sn), and the
+        # minimal ffmpeg fails the whole opening on a WebVTT rendition
+        # ("Error when loading first segment", RTVE's Teledeporte).
+        kept = [line for line in text.splitlines() if not line.startswith('#EXT-X-MEDIA:TYPE=SUBTITLES')]
+        kept = [_SUBTITLES.sub('', line) if line.startswith('#EXT-X-STREAM-INF') else line for line in kept]
+        return rewrite_master('\n'.join(kept), origin, link)
+    out = []
+    for line in prune(text, origin, window).splitlines():
+        if not line.strip():
+            out.append(line)
+        elif line.startswith('#'):
+            out.append(_URI.sub(lambda m: m.group(1) + link(urljoin(origin, m.group(2).strip())) + m.group(3), line))
+        else:
+            out.append(link(line.strip()))
+    return '\n'.join(out) + '\n'

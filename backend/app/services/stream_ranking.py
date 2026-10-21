@@ -108,30 +108,36 @@ def relay_order(streams: Iterable, history: Mapping, now: datetime) -> List[str]
 
     Pure: it reads only the streams, their playback ``history`` (content ID
     -> score with ``score`` and ``demoted``, see ``stream_history``) and
-    ``now``. Saved preferences first; then online and checked within
-    ``FRESH_CHECK_HOURS``; online from an older check; never checked, or
-    offline from an older check. A source found offline recently is left
-    out. Within each group an official HTTP source goes first (it opens in
-    about a second, an acestream in 3 to 17 s on an A55 box), then Castilian,
-    and other languages or Latin American Spanish last
-    (``stream_language_rank``); then a source that played before, then the
-    higher bitrate. A demoted source goes after every group, never dropped.
+    ``now``. A saved preference (#267) comes before all of what follows: the
+    user's order for this channel is the relay's order. Then sources seen
+    online, recent or not; never checked, or offline from an older check; a
+    demoted source after every group, never dropped. A source found offline
+    recently is left out.
+
+    Within a group the language decides before freshness (Óscar, 20-10: on
+    one channel the only source checked that day was in another language and
+    an unmarked one had been online the day before; if that one is gone, the
+    relay moves on after one attempt): an official HTTP source first (it opens
+    in about a second, an acestream in 3 to 17 s on an A55 box), then
+    Castilian, unmarked, other languages and Latino
+    (``stream_language_rank``), then a check within ``FRESH_CHECK_HOURS``,
+    then the playback history score, then bitrate.
     """
     fresh_since = now - timedelta(hours=FRESH_CHECK_HOURS)
     ranked = []
     for stream in streams:
         fresh = checked_since(stream, fresh_since, now)
         if stream.is_online:
-            bucket = 0 if fresh else 1
+            group = 0
         elif stream.is_online is False and fresh:
             continue
         else:
-            bucket = 2
+            group = 1
         past = history.get(stream.id.lower())
         if past is not None and past.demoted:
-            bucket = 3
+            group = 2
         score = past.score if past is not None else 0.5
         http = stream.id.startswith("url:")
-        ranked.append((*preference_key(stream), bucket, not http, stream_language_rank(stream), -score,
+        ranked.append((*preference_key(stream), group, not http, stream_language_rank(stream), not fresh, -score,
                        -(getattr(stream, "bitrate_bps", None) or 0), stream.id.lower()))
     return list(dict.fromkeys(row[-1] for row in sorted(ranked)))

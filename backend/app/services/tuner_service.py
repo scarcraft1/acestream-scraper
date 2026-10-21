@@ -203,9 +203,12 @@ class TunerService:
         return list(dict.fromkeys(stream.id.lower() for stream in valid))
 
     def relay_stream_ids(self, tv_channel_id: int) -> List[str]:
-        """Saved preferences first among eligible sources; otherwise online and checked recently;
-        online from an old check; then never checked, or offline from an old
-        check. Only a source found offline recently is left out.
+        """What the TV relay tries, in order: first the sources the user
+        ordered for this channel (#267), in that order; then the rest, sources
+        seen online (recently or not) before never checked or offline from an
+        old check. Within each, official HTTP first, then by language
+        (Castilian first), then a recent check, then bitrate. Only a source
+        found offline recently is left out, even if the user ordered it.
 
         When a box that is only on now and then is switched on for a match,
         every status is hours or days old, and the source that is live tonight may be the one the

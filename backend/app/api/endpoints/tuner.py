@@ -259,6 +259,15 @@ async def tuner_stream(content_id: str, request: Request):
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 
 
+def _refresh_while_playing() -> bool:
+    db = SessionLocal()
+    try:
+        value = SettingsRepository(db).get_setting("tuner_refresh_while_playing") or "true"
+        return str(value).lower() not in ("false", "0", "no")
+    finally:
+        db.close()
+
+
 def _channel_candidates(tv_channel_id: int, *, include_offline: bool = False) -> List[str]:
     db = SessionLocal()
     try:
@@ -285,7 +294,13 @@ async def tuner_channel(tv_channel_id: int, request: Request):
     claim = relay_registry.try_open(candidates[0] if candidates else "", label, limit)
     if claim is None:
         raise APIError(code="TUNER_BUSY", message=f"All {limit} tuner slots are in use", status_code=503)
-    refresh = tuner_probe_service.start(tv_channel_id)
+    # Checking the channel's other sources while it plays opens and reads them
+    # on the same engine. On the box (an A55) that coincided with the audio of
+    # the playing source stalling 24 s in. `tuner_refresh_while_playing` =
+    # false skips it at open and every 60 s; a failing source still asks for
+    # a refresh.
+    refresh_while_playing = await run_in_threadpool(_refresh_while_playing)
+    refresh = tuner_probe_service.start(tv_channel_id) if refresh_while_playing else None
 
     async def refresh_failed_source(_content_id: str) -> None:
         nonlocal refresh
@@ -297,7 +312,7 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             await asyncio.sleep(SOURCE_REFRESH_SECONDS)
             refresh = tuner_probe_service.start(tv_channel_id)
 
-    monitor = asyncio.create_task(monitor_alternatives())
+    monitor = asyncio.create_task(monitor_alternatives() if refresh_while_playing else asyncio.sleep(0))
 
     async def refreshed_candidates() -> tuple[List[str], bool]:
         current = await run_in_threadpool(_channel_candidates, tv_channel_id)

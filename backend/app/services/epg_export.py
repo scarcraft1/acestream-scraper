@@ -6,6 +6,46 @@ from sqlalchemy.orm import Session
 from app.models.models import EPGChannel, EPGProgram, TVChannel
 
 
+def overlay_matches(regular: List, matches: List) -> List:
+    """Regular programmes with the matches laid over them, in start order.
+
+    Where a match is on, it wins. A regular programme is cut around it, not
+    dropped: a 3 h block with a 2 h match inside keeps its remaining hour.
+    Pieces shorter than a minute are discarded. Programmes are copied, never
+    modified, so nothing here can change what is stored.
+    """
+    if not matches:
+        return list(regular)
+    from types import SimpleNamespace
+    spans = sorted((m.start_time, m.end_time) for m in matches)
+    out = list(matches)
+    for program in regular:
+        pieces = [(program.start_time, program.end_time)]
+        for m_start, m_end in spans:
+            cut = []
+            for p_start, p_end in pieces:
+                if m_end <= p_start or m_start >= p_end:
+                    cut.append((p_start, p_end))
+                    continue
+                if p_start < m_start:
+                    cut.append((p_start, m_start))
+                if m_end < p_end:
+                    cut.append((m_end, p_end))
+            pieces = cut
+        for p_start, p_end in pieces:
+            if (p_end - p_start) < timedelta(minutes=1):
+                continue
+            if (p_start, p_end) == (program.start_time, program.end_time):
+                out.append(program)
+            else:
+                out.append(SimpleNamespace(
+                    start_time=p_start, end_time=p_end, title=program.title,
+                    subtitle=program.subtitle, description=program.description,
+                    category=program.category,
+                    image_url=getattr(program, 'image_url', None)))
+    return sorted(out, key=lambda p: p.start_time)
+
+
 class EPGExportOperations:
     db: Session
 
@@ -31,7 +71,10 @@ class EPGExportOperations:
             '<tv generator-info-name="Acestream Scraper EPG Generator" generator-info-url="https://github.com/pipepito/acestream-scraper">'
         ]
 
-        tv_channels_query = self.db.query(TVChannel).filter(TVChannel.epg_id.isnot(None))
+        # A channel with only a football agenda (no regular guide) is
+        # exported too: «M+ Liga de Campeones 7» may have nothing else.
+        tv_channels_query = self.db.query(TVChannel).filter(
+            (TVChannel.epg_id.isnot(None)) | (TVChannel.agenda_epg_id.isnot(None)))
 
         if search_term:
             tv_channels_query = tv_channels_query.filter(TVChannel.name.ilike(f"%{search_term}%"))
@@ -53,14 +96,19 @@ class EPGExportOperations:
         channel_epg_mappings = []
         emitted = set()
 
+        agenda_lookup = self.agenda_channel_lookup(sorted_channels)
         for tv_channel in sorted_channels:
-            if not tv_channel.epg_id:
-                continue
-            epg_channel = epg_lookup.get((tv_channel.epg_source_id, tv_channel.epg_id))
-            if epg_channel is None:
+            epg_channel = (epg_lookup.get((tv_channel.epg_source_id, tv_channel.epg_id))
+                           if tv_channel.epg_id else None)
+            agenda_channel = agenda_lookup.get(tv_channel.agenda_epg_id) if tv_channel.agenda_epg_id else None
+            if epg_channel is None and agenda_channel is None:
                 continue
 
-            epg_id = identities.resolve(tv_channel.epg_source_id, tv_channel.epg_id)
+            # The id Kodi matches against the playlist's tvg-id. A regular
+            # guide keeps its resolved id; an agenda-only channel uses the
+            # agenda id, which the playlist emits for it too.
+            epg_id = (identities.resolve(tv_channel.epg_source_id, tv_channel.epg_id)
+                      if epg_channel is not None else tv_channel.agenda_epg_id)
             if epg_id in emitted:
                 continue
             emitted.add(epg_id)
@@ -70,7 +118,8 @@ class EPGExportOperations:
                 'epg_id': epg_id,
                 'display_name': display_name,
                 'tv_channel': tv_channel,
-                'epg_channel': epg_channel
+                'epg_channel': epg_channel,
+                'agenda_channel': agenda_channel,
             })
 
         # Generate channel definitions
@@ -88,17 +137,43 @@ class EPGExportOperations:
         xml_lines.append('')
 
         programs_by_channel = self.programs_in_window(
-            [mapping['epg_channel'].id for mapping in channel_epg_mappings],
+            [m[k].id for m in channel_epg_mappings
+             for k in ('epg_channel', 'agenda_channel') if m[k] is not None],
             days_back,
             days_forward,
         )
         for mapping in channel_epg_mappings:
-            for program in programs_by_channel.get(mapping['epg_channel'].id, []):
+            regular = (programs_by_channel.get(mapping['epg_channel'].id, [])
+                       if mapping['epg_channel'] is not None else [])
+            matches = (programs_by_channel.get(mapping['agenda_channel'].id, [])
+                       if mapping['agenda_channel'] is not None else [])
+            for program in overlay_matches(regular, matches):
                 xml_lines.extend(self.programme_xml_lines(program, mapping['epg_id']))
 
         xml_lines.append('</tv>')
 
         return '\n'.join(xml_lines)
+
+    def agenda_channel_lookup(self, tv_channels: List[TVChannel]) -> Dict[str, EPGChannel]:
+        """Map agenda_epg_id to its guide channel, in any ENABLED source.
+
+        Agenda ids carry their own prefix (`futbolenlatv.`), so they are
+        unique without a source id; a disabled agenda source exports nothing.
+        """
+        ids = {c.agenda_epg_id for c in tv_channels if c.agenda_epg_id}
+        if not ids:
+            return {}
+        from app.models.models import EPGSource
+        rows = (
+            self.db.query(EPGChannel).join(EPGSource)
+            .filter(EPGChannel.channel_xml_id.in_(ids), EPGSource.enabled.is_(True))
+            .order_by(EPGChannel.id)
+            .all()
+        )
+        lookup: Dict[str, EPGChannel] = {}
+        for row in rows:
+            lookup.setdefault(row.channel_xml_id, row)
+        return lookup
 
     def epg_channel_lookup(self, tv_channels: List[TVChannel]) -> Dict[Tuple[Optional[int], str], EPGChannel]:
         """Map (epg_source_id, channel_xml_id) to the EPG channel each TV channel points at."""

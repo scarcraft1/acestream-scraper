@@ -80,6 +80,7 @@ class TVChannelBase(BaseModel):
     language: Optional[str] = None
     website: Optional[str] = None
     epg_id: Optional[str] = None
+    agenda_epg_id: Optional[str] = None
     channel_number: Optional[int] = None
 
 
@@ -100,10 +101,21 @@ class TVChannelUpdate(BaseModel):
     language: Optional[str] = None
     website: Optional[str] = None
     epg_id: Optional[str] = None
+    agenda_epg_id: Optional[str] = None
     is_active: Optional[bool] = None
     is_favorite: Optional[bool] = None
     channel_number: Optional[int] = None
     epg_source_id: Optional[int] = None
+
+    @field_validator("agenda_epg_id", mode="before")
+    @classmethod
+    def blank_agenda_clears_it(cls, value):
+        # An emptied field must REMOVE the agenda, not be ignored: a value
+        # that cannot be cleared from the form is a trap (the channel number
+        # has it).
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 

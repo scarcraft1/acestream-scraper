@@ -193,6 +193,12 @@ class TVChannel(Base):
     language = Column(String(255), nullable=True)
     website = Column(String(2048), nullable=True)
     epg_id = Column(String(255), nullable=True)
+    # Guide channel of a football agenda source (e.g. futbolenlatv.m-plus-laliga).
+    # Its matches are laid OVER the regular guide of `epg_id` when exporting:
+    # where a match is on, it wins; the rest of the day keeps the usual
+    # programmes. Separate from `epg_id` because a channel has ONE regular
+    # guide, and the agenda is not a full schedule.
+    agenda_epg_id = Column(String(255), nullable=True)
     epg_source_id = Column(Integer, ForeignKey("epg_sources.id"), nullable=True)
     created_at = Column(UtcDateTime(), default=_utcnow)
     updated_at = Column(UtcDateTime(), default=_utcnow, onupdate=_utcnow)

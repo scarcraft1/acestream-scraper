@@ -304,7 +304,7 @@ class PlaylistService:
                         attrs.append(f'tvg-chno="{tv_channel.channel_number}"')
                 # All streams of a channel share the channel's EPG listing, so
                 # tvg-id stays un-suffixed and keeps matching the EPG XML ids.
-                epg_id = self.epg_ids.resolve(tv_channel.epg_source_id, tv_channel.epg_id) if tv_channel.epg_id else self.epg_ids.resolve(None, stream.tvg_id)
+                epg_id = self._tv_channel_epg_id(tv_channel, stream.tvg_id)
                 if epg_id:
                     attrs.append(f'tvg-id="{self._attr(epg_id)}"')
                 attrs.append(f'tvg-name="{display_name}"')
@@ -376,6 +376,20 @@ class PlaylistService:
         playlists and the tuner playlist quote attributes identically.
         """
         return m3u_attr(value)
+
+    def _tv_channel_epg_id(self, tv_channel, stream_tvg_id):
+        """The tvg-id the XMLTV export uses for this TV channel.
+
+        Regular guide first, then the football agenda when it is the only
+        guide the channel has (the export emits that id for it), then the
+        stream's own tvg-id. Must stay in step with `generate_epg_xml`, or Kodi
+        shows a channel with no guide.
+        """
+        if tv_channel.epg_id:
+            return self.epg_ids.resolve(tv_channel.epg_source_id, tv_channel.epg_id)
+        if getattr(tv_channel, 'agenda_epg_id', None):
+            return tv_channel.agenda_epg_id
+        return self.epg_ids.resolve(None, stream_tvg_id)
 
     def _link_lines(self, link: str) -> List[str]:
         """The lines that open a stream: its link, preceded by the mimetype
@@ -567,7 +581,7 @@ class PlaylistService:
 
             # Add channel name and ID if available
             tv = channel.tv_channel
-            tvg_id = (self.epg_ids.resolve(tv.epg_source_id, tv.epg_id) if tv and tv.epg_id
+            tvg_id = (self._tv_channel_epg_id(tv, channel.tvg_id) if tv
                       else self.epg_ids.resolve(None, channel.tvg_id))
             if tvg_id:
                 attrs.append(f'tvg-id="{self._attr(tvg_id)}"')

@@ -54,6 +54,7 @@ export const useTVChannelForm = () => {
       is_active: channel.is_active,
       is_favorite: channel.is_favorite,
       epg_id: channel.epg_id || '',
+      agenda_epg_id: channel.agenda_epg_id || '',
       channel_number: channel.channel_number,
     });
     setOpenEditDialog(true);
@@ -77,6 +78,11 @@ export const useTVChannelForm = () => {
     country: sanitizeTextInput(formData.country),
     language: sanitizeTextInput(formData.language),
     epg_id: 'epg_id' in formData ? sanitizeTextInput(formData.epg_id) : undefined,
+    // Sent as null when emptied, so clearing the field removes the agenda
+    // instead of being silently ignored.
+    agenda_epg_id: 'agenda_epg_id' in formData
+      ? sanitizeTextInput(formData.agenda_epg_id ?? undefined) || null
+      : undefined,
   });
 
   const validateForm = (): TVChannelCreate | TVChannelUpdate | null => {

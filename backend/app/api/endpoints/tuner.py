@@ -11,6 +11,7 @@ import asyncio
 import time
 
 import html
+import logging
 import re
 from dataclasses import asdict
 from typing import List
@@ -36,6 +37,8 @@ from app.services.tuner_playback_service import relay_ranked_streams, prefer_rec
 from app.services.tuner_remux import ffmpeg_binary
 from app.services.tuner_probe_service import tuner_probe_service
 from app.services import tuner_playback_service, waiting_card
+
+logger = logging.getLogger(__name__)
 
 hdhr_router = APIRouter(prefix="/tuner", dependencies=[Depends(require_tuner_network)], tags=["hdhomerun"])
 router = APIRouter()  # /api/v1/tuner settings + status
@@ -406,6 +409,11 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             yield first
             async for chunk in iterator:
                 yield chunk
+        except (EngineStreamError, EngineUnavailableError):
+            # No source left after playback had started (the midstream switch
+            # spent them all, with the waiting card off). Video already went
+            # out: end the response instead of breaking the transfer.
+            logger.info("TV relay ran out of sources after playback; ending tv_channel_id=%s", tv_channel_id)
         finally:
             monitor.cancel()
             await asyncio.gather(monitor, return_exceptions=True)

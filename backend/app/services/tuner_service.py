@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 MIN_TUNER_COUNT, MAX_TUNER_COUNT = 1, 16
 MIN_MAX_CHANNELS, MAX_MAX_CHANNELS = 1, 1000
 MIN_START_SECONDS, MAX_START_SECONDS = 5, 180
+# Past 28 s Kodi has already given up (it waits 30 s for the video).
+MAX_WAITING_CARD_SECONDS = 28
 
 
 class TunerDeviceIdError(RuntimeError):
@@ -71,9 +73,11 @@ class TunerSettings:
     only_online: bool
     experimental_transcoding: bool = False
     # Seconds a source gets to deliver its first byte, and for the whole start
-    # across sources: a cold P2P start can take longer than the defaults.
-    source_start_seconds: int = 15
-    startup_budget_seconds: int = 45
+    # across sources. Settings because a slow box needs more than the bank.
+    source_start_seconds: int = 20
+    startup_budget_seconds: int = 28
+    # Seconds without a byte before the waiting card is sent; 0 = never.
+    waiting_card_seconds: int = 20
 
 
 @dataclass
@@ -105,18 +109,30 @@ class Lineup:
 
 
 # A check older than this ranks a source after every fresher one when the
-# relay picks what to try first. The status check runs hourly by default.
+# relay picks what to try first. The check runs hourly while the box is on.
 FRESH_CHECK_HOURS = 6
 
 
-def _checked_since(stream, since, until) -> bool:
+def _relayable(stream) -> bool:
+    """An acestream the engine opens, or an HTTP source with its URL
+    (app.services.http_relay)."""
+    if re.fullmatch(r"[0-9a-fA-F]{40}", stream.id):
+        return True
+    return stream.id.startswith("url:") and bool(getattr(stream, "stream_url", None))
+
+
+def _relay_id(stream) -> str:
+    # Acestream ids are case-insensitive hex; an HTTP id is kept as stored.
+    return stream.id if stream.id.startswith("url:") else stream.id.lower()
+
+
+def _checked_since(stream, since) -> bool:
     checked = getattr(stream, "last_checked", None)
     if checked is None:
         return False
     if checked.tzinfo is None:
         checked = checked.replace(tzinfo=timezone.utc)
-    # A clock correction must not make an observation fresh indefinitely.
-    return since <= checked <= until
+    return checked >= since
 
 
 class TunerService:
@@ -135,11 +151,13 @@ class TunerService:
             only_online=str(repo.get_setting(SettingsRepository.TUNER_ONLY_ONLINE) or "false").lower() in ("true", "1"),
             source_start_seconds=int(repo.get_setting(SettingsRepository.TUNER_SOURCE_START_SECONDS) or SettingsRepository.DEFAULT_TUNER_SOURCE_START_SECONDS),
             startup_budget_seconds=int(repo.get_setting(SettingsRepository.TUNER_STARTUP_BUDGET_SECONDS) or SettingsRepository.DEFAULT_TUNER_STARTUP_BUDGET_SECONDS),
+            waiting_card_seconds=int(repo.get_setting(SettingsRepository.TUNER_WAITING_CARD_SECONDS) or SettingsRepository.DEFAULT_TUNER_WAITING_CARD_SECONDS),
         )
 
     def update_settings(self, *, friendly_name: Optional[str] = None, tuner_count: Optional[int] = None,
                         max_channels: Optional[int] = None, only_online: Optional[bool] = None, experimental_transcoding: Optional[bool] = None,
-                        source_start_seconds: Optional[int] = None, startup_budget_seconds: Optional[int] = None) -> TunerSettings:
+                        source_start_seconds: Optional[int] = None, startup_budget_seconds: Optional[int] = None,
+                        waiting_card_seconds: Optional[int] = None) -> TunerSettings:
         repo = self.settings_repo
         if friendly_name is not None:
             repo.set_setting(SettingsRepository.TUNER_FRIENDLY_NAME, friendly_name.strip() or SettingsRepository.DEFAULT_TUNER_FRIENDLY_NAME, "Tuner name shown in Jellyfin/Plex")
@@ -155,6 +173,8 @@ class TunerService:
             repo.set_setting(SettingsRepository.TUNER_SOURCE_START_SECONDS, str(max(MIN_START_SECONDS, min(MAX_START_SECONDS, int(source_start_seconds)))), "Seconds a source gets to deliver its first byte")
         if startup_budget_seconds is not None:
             repo.set_setting(SettingsRepository.TUNER_STARTUP_BUDGET_SECONDS, str(max(MIN_START_SECONDS, min(MAX_START_SECONDS, int(startup_budget_seconds)))), "Seconds for the whole start across sources")
+        if waiting_card_seconds is not None:
+            repo.set_setting(SettingsRepository.TUNER_WAITING_CARD_SECONDS, str(max(0, min(MAX_WAITING_CARD_SECONDS, int(waiting_card_seconds)))), "Seconds without video before the waiting card; 0 = never")
         return self.settings()
 
     def device_id(self) -> str:
@@ -179,44 +199,44 @@ class TunerService:
 
     def stream_ids(self, tv_channel_id: int, *, online_only: bool = False) -> List[str]:
         streams = ChannelRepository(self.db).get_tuner_streams(tv_channel_id, online_only=online_only)
-        valid = [stream for stream in streams if re.fullmatch(r"[0-9a-fA-F]{40}", stream.id)]
+        valid = [stream for stream in streams if _relayable(stream)]
         # Recently checked first, then by bitrate. A box that is only on now
-        # and then keeps "online" from a session hours or days ago, and a
-        # stale source that fails uses up its whole start time before the
-        # next one is tried, so it goes after every fresh one. It is not
-        # dropped: only tried later.
-        now = datetime.now(timezone.utc)
-        fresh_since = now - timedelta(hours=FRESH_CHECK_HOURS)
-        valid.sort(key=lambda stream: (not _checked_since(stream, fresh_since, now), -(stream.bitrate_bps or 0), stream.id))
-        return list(dict.fromkeys(stream.id.lower() for stream in valid))
+        # and then keeps "online" from a session hours or days ago; the first
+        # source tried eats 20 of the 30 s Kodi gives an opening, so a stale
+        # one goes after every fresh one. It is not dropped: only tried later.
+        fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
+        valid.sort(key=lambda stream: (not _checked_since(stream, fresh_since), -(stream.bitrate_bps or 0), stream.id))
+        return list(dict.fromkeys(_relay_id(stream) for stream in valid))
 
     def relay_stream_ids(self, tv_channel_id: int) -> List[str]:
         """What the TV relay tries, in order: online and checked recently;
         online from an old check; then never checked, or offline from an old
         check. Only a source found offline recently is left out.
 
-        When a box that is only on now and then is switched on for a match,
-        every status is hours or days old, and the source that is live tonight may be the one the
+        The box is switched on for a match: every status is then hours or
+        days old, and the source that is live tonight may be the one the
         last check, last week, found offline. Leaving it out made the
         channel fail with a live source assigned to it. A recent offline
-        verdict from a status check still counts.
+        verdict (a check, or the relay itself) still counts.
         """
         streams = ChannelRepository(self.db).get_tuner_streams(tv_channel_id)
-        now = datetime.now(timezone.utc)
-        fresh_since = now - timedelta(hours=FRESH_CHECK_HOURS)
+        fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
         ranked = []
         for stream in streams:
-            if not re.fullmatch(r"[0-9a-fA-F]{40}", stream.id):
+            if not _relayable(stream):
                 continue
-            fresh = _checked_since(stream, fresh_since, now)
+            fresh = _checked_since(stream, fresh_since)
             if stream.is_online:
                 bucket = 0 if fresh else 1
             elif stream.is_online is False and fresh:
                 continue
             else:
                 bucket = 2
-            ranked.append((bucket, -(stream.bitrate_bps or 0), stream.id.lower()))
-        return list(dict.fromkeys(cid for _, _, cid in sorted(ranked)))
+            # Within a group an official HTTP source goes first: it opens in
+            # about a second, an acestream in 3 to 17 on the box.
+            http = stream.id.startswith("url:")
+            ranked.append((bucket, not http, -(stream.bitrate_bps or 0), _relay_id(stream)))
+        return list(dict.fromkeys(entry[-1] for entry in sorted(ranked)))
 
     # --- lineup -------------------------------------------------------------
     def build_lineup(self) -> Lineup:

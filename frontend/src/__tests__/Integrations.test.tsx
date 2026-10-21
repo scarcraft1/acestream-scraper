@@ -591,6 +591,26 @@ describe('Integrations page', () => {
       expect.objectContaining({ source_start_seconds: 40, startup_budget_seconds: 58 })));
   });
 
+  it('sets when the waiting card appears, or turns it off', async () => {
+    // Óscar: as rarely as possible. 20 s by default: only once the first
+    // source has had its time; Kodi gives up at 30 s.
+    renderPage();
+    const section = screen.getByRole('region', { name: 'Media servers' });
+    fireEvent.click(within(section).getByRole('button', { name: 'Tuner settings' }));
+    const card = within(section).getByRole('spinbutton', { name: 'Seconds before the waiting card' });
+    const save = within(section).getByRole('button', { name: 'Save tuner settings' });
+    expect(card).toHaveValue(20);
+
+    fireEvent.change(card, { target: { value: '29' } });
+    expect(within(section).getByText('Enter a whole number between 0 and 28.')).toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    fireEvent.change(card, { target: { value: '0' } });
+    fireEvent.click(save);
+    await waitFor(() => expect(mockUpdateTunerSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ waiting_card_seconds: 0 })));
+  });
+
   it('requires explicitly enabling experimental transcoding recovery', async () => {
     renderPage();
     const section = screen.getByRole('region', { name: 'Media servers' });

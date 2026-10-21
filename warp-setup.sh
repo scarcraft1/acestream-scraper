@@ -186,6 +186,22 @@ if [ -n "${TOR_SOCKS_PORT:-}" ]; then
     start_once tor-forward python3 "$WARP_SCRIPTS_DIR/tcp-forward.py" --port "$TOR_SOCKS_PORT" --to 127.0.0.1:9050
 fi
 
+# Hosts that must not go through the tunnel, comma or space separated. Some
+# services refuse WARP as an anonymizing proxy: on 2026-10-21 Brightcove's
+# playback API (edge.api.brightcove.com) answered Telemadrid and La Otra with
+# 403 CLIENT_GEO anonymizing_proxy through WARP and 200 without it, while their
+# HLS segments played fine through WARP. `tunnel host add` is idempotent, and
+# WARP keeps the list across reconnects; it runs on every configure anyway.
+exclude_hosts=${WARP_EXCLUDE_HOSTS:-}
+for host in ${exclude_hosts//,/ }; do
+    [ -n "$host" ] || continue
+    if warp-cli --accept-tos tunnel host add "$host" >> "$WARP_LOG" 2>&1; then
+        log "Excluded from the tunnel: $host"
+    else
+        log "Could not exclude $host from the tunnel"
+    fi
+done
+
 log "Checking WARP status"
 warp-cli --accept-tos status >> "$WARP_LOG" 2>&1
 log "WARP initialization completed"

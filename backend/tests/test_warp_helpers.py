@@ -230,3 +230,45 @@ def test_tcp_forward_relays_bytes():
             fwd.close()
 
     asyncio.run(scenario())
+
+
+def test_excluded_hosts_are_added_to_the_tunnel_exclusions(tmp_path):
+    """Brightcove refuses WARP as an anonymizing proxy (21-10)."""
+    calls = tmp_path / "cli-calls"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    cli = bin_dir / "warp-cli"
+    cli.write_text(f"#!/bin/sh\necho \"$*\" >> {calls}\necho 'Status update: Connected'\n")
+    cli.chmod(0o755)
+    env = {
+        **os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+        "LOG_DIR": str(tmp_path / "logs"), "ENABLE_WARP": "true", "WARP_ENABLE_NAT": "false",
+        "WARP_REQUIRED_COMMANDS": "warp-cli", "WARP_READY_ATTEMPTS": "2",
+        "WARP_READY_INTERVAL": "0.01", "WARP_LICENSE_KEY": "",
+        "WARP_RUN_DIR": str(tmp_path), "WARP_SCRIPTS_DIR": str(tmp_path),
+        "WARP_EXCLUDE_HOSTS": "edge.api.brightcove.com, example.org",
+    }
+    result = subprocess.run(["bash", str(SETUP), "configure"], env=env,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    lines = calls.read_text().splitlines()
+    assert "--accept-tos tunnel host add edge.api.brightcove.com" in lines
+    assert "--accept-tos tunnel host add example.org" in lines
+
+
+def test_no_exclusions_by_default(tmp_path):
+    calls = tmp_path / "cli-calls"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    cli = bin_dir / "warp-cli"
+    cli.write_text(f"#!/bin/sh\necho \"$*\" >> {calls}\necho 'Status update: Connected'\n")
+    cli.chmod(0o755)
+    env = {
+        **os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+        "LOG_DIR": str(tmp_path / "logs"), "ENABLE_WARP": "true", "WARP_ENABLE_NAT": "false",
+        "WARP_REQUIRED_COMMANDS": "warp-cli", "WARP_READY_ATTEMPTS": "2",
+        "WARP_READY_INTERVAL": "0.01", "WARP_LICENSE_KEY": "", "WARP_RUN_DIR": str(tmp_path),
+    }
+    env.pop("WARP_EXCLUDE_HOSTS", None)
+    subprocess.run(["bash", str(SETUP), "configure"], env=env, capture_output=True, text=True, timeout=10)
+    assert not any("tunnel host add" in l for l in calls.read_text().splitlines())

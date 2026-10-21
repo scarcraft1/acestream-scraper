@@ -230,3 +230,151 @@ async def test_SI_EL_SERVIDOR_CANCELA_LA_RESPUESTA_EL_RELE_SE_CIERRA(monkeypatch
         await consume()
     await asyncio.sleep(0.1)
     assert log == ['closed']
+
+
+# --- Kodi's second GET, and the end card (16-10) -----------------------------
+# Kodi opens a channel with two GETs and makes the second only once the first
+# has data. The second waited the threshold again, so the card came at twice
+# the threshold -- 40 s at the default 20, past Kodi's 30 s limit: it was never
+# seen, and Kodi showed «Playback failed» (kodi-local-1, 16-10).
+
+@pytest.mark.asyncio
+async def test_EL_SEGUNDO_GET_DE_KODI_SACA_LA_CARTA_SIN_VOLVER_A_ESPERAR(monkeypatch):
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    key = ('10.0.0.5', 7)
+    first = waiting_card.with_waiting_card(_source(5), CARD, after=0.2, card_seconds=10, key=key)
+    await anext(first)                        # the first GET got the card
+    await first.aclose()                      # and Kodi closed it for the second
+    second = waiting_card.with_waiting_card(_source(5), CARD, after=0.2, card_seconds=10, key=key)
+    started = time.monotonic()
+    chunk = await anext(second)
+    await second.aclose()
+    assert CARD.startswith(chunk)
+    assert time.monotonic() - started < 0.1   # not another 0.2 s
+
+
+@pytest.mark.asyncio
+async def test_OTRO_CLIENTE_U_OTRO_CANAL_SI_ESPERAN(monkeypatch):
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    first = waiting_card.with_waiting_card(_source(5), CARD, after=0.1, card_seconds=10, key=('10.0.0.5', 7))
+    await anext(first)
+    await first.aclose()
+    for key in (('10.0.0.6', 7), ('10.0.0.5', 8), None):
+        other = waiting_card.with_waiting_card(_source(5), CARD, after=0.3, card_seconds=10, key=key)
+        started = time.monotonic()
+        await anext(other)
+        await other.aclose()
+        assert time.monotonic() - started >= 0.25, key
+
+
+END = bytes([0x47, 1]) + bytes(186)
+END = END * 50
+
+
+@pytest.mark.asyncio
+async def test_SIN_NINGUNA_FUENTE_CARTA_FINAL_Y_FIN_LIMPIO(monkeypatch):
+    """A 502 made Kodi show «Playback failed», with an OK to press; a clean
+    end goes back to the menu (kodi-local-2, 16-10)."""
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    stream = waiting_card.with_waiting_card(_source(0.1, fail=RuntimeError('no source')), CARD, after=5,
+                                            card_seconds=10, key=('k', 1), end_card=END,
+                                            end_errors=(RuntimeError,), end_seconds=0.2)
+    out = b''.join([c async for c in stream])
+    assert out == END
+
+
+@pytest.mark.asyncio
+async def test_DESPUES_DE_LA_CONECTANDO_TAMBIEN_SALE_LA_FINAL(monkeypatch):
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    stream = waiting_card.with_waiting_card(_source(0.3, fail=RuntimeError('no source')), CARD, after=0.05,
+                                            card_seconds=10, key=('k', 2), end_card=END,
+                                            end_errors=(RuntimeError,), end_seconds=0.2)
+    out = b''.join([c async for c in stream])
+    assert out.endswith(END) and CARD.startswith(out[:-len(END)]) and len(out) > len(END)
+
+
+@pytest.mark.asyncio
+async def test_EL_SEGUNDO_GET_DE_UN_CANAL_MUERTO_NO_PRUEBA_OTRA_VEZ(monkeypatch):
+    """Or Kodi's second GET would try every dead source again before the
+    end card: twice the wait for the same answer."""
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    key = ('k', 3)
+    first = waiting_card.with_waiting_card(_source(0.05, fail=RuntimeError('no source')), CARD, after=5,
+                                           card_seconds=10, key=key, end_card=END,
+                                           end_errors=(RuntimeError,), end_seconds=0.2)
+    await anext(first)
+    await first.aclose()
+    log = []
+    second = waiting_card.with_waiting_card(_source(5, log=log), CARD, after=5, card_seconds=10, key=key,
+                                            end_card=END, end_errors=(RuntimeError,), end_seconds=0.2)
+    started = time.monotonic()
+    out = b''.join([c async for c in second])
+    assert out == END and time.monotonic() - started < 1
+    assert log == []                          # its relay never even started
+
+
+@pytest.mark.asyncio
+async def test_OTROS_ERRORES_SIGUEN_SALIENDO_AUNQUE_HAYA_CARTA_FINAL(monkeypatch):
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    stream = waiting_card.with_waiting_card(_source(0.05, fail=ValueError('bug')), CARD, after=5, card_seconds=10,
+                                            key=('k', 4), end_card=END, end_errors=(RuntimeError,), end_seconds=0.2)
+    with pytest.raises(ValueError):
+        async for _ in stream:
+            pass
+
+
+def test_LA_CARTA_FINAL_ES_TS_DE_VERDAD():
+    card = waiting_card.load_end_card()
+    assert len(card) > 50_000 and len(card) % 188 == 0
+    assert all(card[i] == 0x47 for i in range(0, len(card), 188 * 31))
+
+
+def test_LA_RUTA_PONE_LA_CARTA_FINAL_Y_LA_CLAVE_DEL_CLIENTE():
+    import inspect
+    from app.api.endpoints import tuner
+    source = inspect.getsource(tuner.tuner_channel)
+    assert 'end_card=await run_in_threadpool(waiting_card.load_end_card)' in source
+    assert 'key=(request.client.host' in source and 'tv_channel_id)' in source
+
+
+def test_DOS_GET_A_UN_CANAL_MUERTO_CARTA_FINAL_Y_NINGUN_SINTONIZADOR_OCUPADO(alembic_db_session, alembic_client, monkeypatch):
+    """The route end to end, as Kodi does it: two GETs. Both get the end card
+    with a 200; the second does not try the sources again; and no tuner slot
+    is left taken -- the second relay never starts, so it cannot release its
+    own (left taken, the status pass paused for nobody)."""
+    from unittest.mock import Mock
+    from app.api.endpoints import tuner
+    from app.config.settings import get_settings
+    from app.models.models import AcestreamChannel, TVChannel
+    from app.services.stream_relay import EngineStreamError
+    from app.services.tuner_network import get_tuner_gate
+    monkeypatch.setenv('TUNER_ALLOWED_NETWORKS', '*')
+    get_settings.cache_clear(); get_tuner_gate.cache_clear()
+    try:
+        tv = TVChannel(name='Muerto', is_active=True)
+        alembic_db_session.add(tv)
+        alembic_db_session.flush()
+        alembic_db_session.add(AcestreamChannel(id='f' * 40, name='x', tv_channel_id=tv.id, is_active=True, is_online=True))
+        alembic_db_session.commit()
+        monkeypatch.setattr(tuner.tuner_probe_service, 'start', Mock())
+        monkeypatch.setattr(tuner, '_engine', lambda: Mock())
+        monkeypatch.setattr(tuner, '_setting_on', lambda key: False)
+        monkeypatch.setattr(waiting_card, 'END_CARD_SECONDS', 0.1)
+        tries = []
+
+        async def ranked(engine, content_ids, label, claim, **kwargs):
+            tries.append(label)
+            try:
+                raise EngineStreamError('No source could start')
+                yield b''
+            finally:
+                tuner.relay_registry.close(claim.id)
+        monkeypatch.setattr(tuner, 'relay_ranked_streams', ranked)
+        end = waiting_card.load_end_card()
+        for _ in range(2):
+            response = alembic_client.get(f'/tuner/channel/{tv.id}.ts')
+            assert response.status_code == 200 and response.content == end
+        assert len(tries) == 1
+        assert tuner.relay_registry.active() == []
+    finally:
+        get_settings.cache_clear(); get_tuner_gate.cache_clear()

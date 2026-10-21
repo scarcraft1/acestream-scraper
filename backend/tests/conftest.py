@@ -775,6 +775,10 @@ def _process_state_left_clean():
     from app.services.task_service import task_service
     yield
     task_service.shutdown_event.clear()
+    # What each client's last GET did, kept 5 s for Kodi's second GET: left
+    # over, it gives the next test's channel its card at once.
+    from app.services import waiting_card
+    waiting_card._recent.clear()
     pending = [source for source in list(playback_ownership._sources.values())
                if source.pending_stop is not None and source.pending_stop.is_alive()]
     for source in pending:

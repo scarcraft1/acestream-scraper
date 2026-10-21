@@ -60,8 +60,10 @@ def _open_slow_channel(alembic_client, alembic_db_session, monkeypatch, per_sour
                                                 is_active=True, is_online=True))
         alembic_db_session.commit()
         real = TunerService.settings
+        # Without the fork's waiting card: with it the start goes on for as
+        # long as the card lasts and the short setting no longer ends in a 502.
         monkeypatch.setattr(TunerService, 'settings', lambda self: dataclasses.replace(
-            real(self), source_start_seconds=per_source, startup_budget_seconds=1))
+            real(self), source_start_seconds=per_source, startup_budget_seconds=1, waiting_card_seconds=0))
         monkeypatch.setattr(tuner.tuner_probe_service, 'start', Mock())
         monkeypatch.setattr(tuner, '_engine', lambda: Mock())
 

@@ -32,7 +32,9 @@ async def test_a_source_that_dries_up_mid_broadcast_switches_to_the_next(monkeyp
     registry = RelayRegistry()
     claim = registry.try_open('first', 'viewer', 1)
     received = []
-    with pytest.raises(EngineStreamError):   # once every source is spent
+    # Once every source is spent the relay raises; the channel route ends the
+    # response there (or sends the end card when the waiting card is on).
+    with pytest.raises(EngineStreamError):
         async for chunk in relay_ranked_streams(Mock(), ['first', 'second'], 'viewer', claim, registry=registry,
                                                 attempt_seconds=1, startup_budget_seconds=2, switch_midstream=True):
             received.append(chunk)

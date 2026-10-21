@@ -26,10 +26,10 @@ _LOOKUP = [0xA, 0x5, 0xF, 0x6, 0x7, 0xC, 0x1, 0xB, 0x9, 0x2, 0x8, 0xD, 0x4, 0x3,
 logger = logging.getLogger(__name__)
 
 MIN_TUNER_COUNT, MAX_TUNER_COUNT = 1, 16
-MIN_MAX_CHANNELS, MAX_MAX_CHANNELS = 1, 1000
-MIN_START_SECONDS, MAX_START_SECONDS = 5, 180
 # Past 28 s Kodi has already given up (it waits 30 s for the video).
 MAX_WAITING_CARD_SECONDS = 28
+MIN_MAX_CHANNELS, MAX_MAX_CHANNELS = 1, 1000
+MIN_START_SECONDS, MAX_START_SECONDS = 5, 180
 
 
 class TunerDeviceIdError(RuntimeError):
@@ -73,7 +73,7 @@ class TunerSettings:
     only_online: bool
     experimental_transcoding: bool = False
     # Seconds a source gets to deliver its first byte, and for the whole start
-    # across sources. Settings because a slow box needs more than the bank.
+    # across sources: a cold P2P start can take longer than the defaults.
     source_start_seconds: int = 20
     startup_budget_seconds: int = 28
     # Seconds without a byte before the waiting card is sent; 0 = never.
@@ -109,7 +109,7 @@ class Lineup:
 
 
 # A check older than this ranks a source after every fresher one when the
-# relay picks what to try first. The check runs hourly while the box is on.
+# relay picks what to try first. The status check runs hourly by default.
 FRESH_CHECK_HOURS = 6
 
 
@@ -126,13 +126,14 @@ def _relay_id(stream) -> str:
     return stream.id if stream.id.startswith("url:") else stream.id.lower()
 
 
-def _checked_since(stream, since) -> bool:
+def _checked_since(stream, since, until) -> bool:
     checked = getattr(stream, "last_checked", None)
     if checked is None:
         return False
     if checked.tzinfo is None:
         checked = checked.replace(tzinfo=timezone.utc)
-    return checked >= since
+    # A clock correction must not make an observation fresh indefinitely.
+    return since <= checked <= until
 
 
 class TunerService:
@@ -201,11 +202,13 @@ class TunerService:
         streams = ChannelRepository(self.db).get_tuner_streams(tv_channel_id, online_only=online_only)
         valid = [stream for stream in streams if _relayable(stream)]
         # Recently checked first, then by bitrate. A box that is only on now
-        # and then keeps "online" from a session hours or days ago; the first
-        # source tried eats 20 of the 30 s Kodi gives an opening, so a stale
-        # one goes after every fresh one. It is not dropped: only tried later.
-        fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
-        valid.sort(key=lambda stream: (not _checked_since(stream, fresh_since), -(stream.bitrate_bps or 0), stream.id))
+        # and then keeps "online" from a session hours or days ago, and a
+        # stale source that fails uses up its whole start time before the
+        # next one is tried, so it goes after every fresh one. It is not
+        # dropped: only tried later.
+        now = datetime.now(timezone.utc)
+        fresh_since = now - timedelta(hours=FRESH_CHECK_HOURS)
+        valid.sort(key=lambda stream: (not _checked_since(stream, fresh_since, now), -(stream.bitrate_bps or 0), stream.id))
         return list(dict.fromkeys(_relay_id(stream) for stream in valid))
 
     def relay_stream_ids(self, tv_channel_id: int) -> List[str]:
@@ -213,19 +216,20 @@ class TunerService:
         online from an old check; then never checked, or offline from an old
         check. Only a source found offline recently is left out.
 
-        The box is switched on for a match: every status is then hours or
-        days old, and the source that is live tonight may be the one the
+        When a box that is only on now and then is switched on for a match,
+        every status is hours or days old, and the source that is live tonight may be the one the
         last check, last week, found offline. Leaving it out made the
         channel fail with a live source assigned to it. A recent offline
-        verdict (a check, or the relay itself) still counts.
+        verdict from a status check still counts.
         """
         streams = ChannelRepository(self.db).get_tuner_streams(tv_channel_id)
-        fresh_since = datetime.now(timezone.utc) - timedelta(hours=FRESH_CHECK_HOURS)
+        now = datetime.now(timezone.utc)
+        fresh_since = now - timedelta(hours=FRESH_CHECK_HOURS)
         ranked = []
         for stream in streams:
             if not _relayable(stream):
                 continue
-            fresh = _checked_since(stream, fresh_since)
+            fresh = _checked_since(stream, fresh_since, now)
             if stream.is_online:
                 bucket = 0 if fresh else 1
             elif stream.is_online is False and fresh:
@@ -233,7 +237,7 @@ class TunerService:
             else:
                 bucket = 2
             # Within a group an official HTTP source goes first: it opens in
-            # about a second, an acestream in 3 to 17 on the box.
+            # about a second, an acestream in 3 to 17 s on an A55 box.
             http = stream.id.startswith("url:")
             ranked.append((bucket, not http, -(stream.bitrate_bps or 0), _relay_id(stream)))
         return list(dict.fromkeys(entry[-1] for entry in sorted(ranked)))

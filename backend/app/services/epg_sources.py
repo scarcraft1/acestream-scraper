@@ -185,7 +185,10 @@ class EPGSourceOperations:
         for page in tvrioja_guide.page_urls(url):
             validate_outbound_url(page)
             response = source_get(page, timeout=30, allow_redirects=False)
-            response.raise_for_status()
+            # Redirects are not followed here, and raise_for_status lets a
+            # 3xx through: its body would be read as an empty day.
+            if response.status_code != 200:
+                raise requests.HTTPError(f"HTTP {response.status_code} from {page}")
             documents.append(tvrioja_guide.html_to_xmltv(response.content, page))
         return tvrioja_guide.merge_xmltv(documents)
 

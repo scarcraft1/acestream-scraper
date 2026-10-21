@@ -33,6 +33,11 @@ CARD_PATH = Path(__file__).resolve().parent.parent / 'assets' / 'conectando.ts'
 CARD_SECONDS = 60.0
 PACKET = 188
 STEP_SECONDS = 0.2
+# Silence once video has flowed before the card replaces the frozen picture.
+# The relay itself gives a source STALL_SECONDS (15) before moving on; a
+# shorter wait here covers that search. Provisional until the gaps of a
+# healthy source on the box are measured.
+MIDSTREAM_AFTER_SECONDS = 8.0
 
 
 @lru_cache(maxsize=1)
@@ -42,39 +47,58 @@ def load_card() -> bytes:
 
 
 async def with_waiting_card(inner: AsyncIterator[bytes], card: bytes, *, after: float,
+                            midstream_after: float | None = None,
                             card_seconds: float = CARD_SECONDS) -> AsyncIterator[bytes]:
-    """`inner` as is when its first chunk comes within `after` seconds;
-    otherwise the card until it does. Errors from `inner` pass through."""
+    """`inner` as is while it flows; the card while it is silent.
+
+    Before the first chunk the card comes after `after` seconds. Once video
+    has flowed, after `midstream_after` seconds of silence (None: never):
+    measured on the box (kodi-0c, 15-10), M+ LaLiga stopped 4 s in and the
+    relay spent over a minute finding another source, with Kodi showing the
+    last frame. Each silence starts the card from the beginning, and the
+    next real chunk -- the same source back, or the next one -- is spliced
+    in. Errors and the end of `inner` pass through.
+    """
     rate = len(card) / card_seconds
-    started = time.monotonic()
-    first = asyncio.ensure_future(anext(inner))
-    sent = 0
+    last_data = time.monotonic()
+    flowed = False
+    sent = 0                      # card bytes sent in the current silence
+    pending = asyncio.ensure_future(anext(inner))
     try:
-        while not first.done():
-            await asyncio.wait({first}, timeout=STEP_SECONDS)
-            if first.done():
-                break
-            showing = time.monotonic() - started - after
+        while True:
+            await asyncio.wait({pending}, timeout=STEP_SECONDS)
+            if pending.done():
+                try:
+                    chunk = pending.result()
+                except StopAsyncIteration:
+                    return
+                if sent:
+                    logger.info('TV relay waiting card ended: video spliced in after %.1f s of silence (%d card bytes sent)',
+                                time.monotonic() - last_data, sent)
+                    sent = 0
+                yield chunk
+                flowed = True
+                last_data = time.monotonic()
+                pending = asyncio.ensure_future(anext(inner))
+                continue
+            threshold = midstream_after if flowed else after
+            if threshold is None:
+                continue
+            showing = time.monotonic() - last_data - threshold
             if showing < 0 or sent >= len(card):
                 continue
             due = min(len(card), int((showing + 1) * rate) // PACKET * PACKET)
             if due > sent:
                 if sent == 0:
-                    logger.info('TV relay waiting card started after %.1f s without video', time.monotonic() - started)
+                    logger.info('TV relay waiting card started after %.1f s without video%s',
+                                time.monotonic() - last_data, ' (midstream)' if flowed else '')
                 yield card[sent:due]
                 sent = due
-        chunk = first.result()
-        if sent:
-            logger.info('TV relay waiting card ended: source spliced in after %.1f s (%d card bytes sent)',
-                        time.monotonic() - started, sent)
-        yield chunk
-        async for chunk in inner:
-            yield chunk
     finally:
         # The client left or the source failed: the relay inside closes too,
         # so its engine session and tuner slot are released.
-        if not first.done():
-            first.cancel()
+        if not pending.done():
+            pending.cancel()
             with contextlib.suppress(BaseException):
-                await first
+                await pending
         await inner.aclose()

@@ -371,9 +371,15 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             # another: the card instead of the last frame frozen on screen.
             # Not before: a healthy low-bitrate source is silent for up to
             # 16 s between pieces, and the card would cut in every time.
+            # And when no source is left, a few seconds of «Sin señal» and a
+            # clean end, instead of a 502 and Kodi's «Playback failed».
             iterator = waiting_card.with_waiting_card(iterator, await run_in_threadpool(waiting_card.load_card),
                                                       after=card_after,
-                                                      midstream_after=tuner_playback_service.STALL_SECONDS)
+                                                      midstream_after=tuner_playback_service.STALL_SECONDS,
+                                                      key=(request.client.host if request.client else '?', tv_channel_id),
+                                                      end_card=await run_in_threadpool(waiting_card.load_end_card),
+                                                      end_errors=(EngineStreamError, EngineUnavailableError,
+                                                                  EngineRefusedError))
         first = await anext(iterator)
     except BaseException as exc:
         monitor.cancel()
@@ -396,6 +402,11 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             monitor.cancel()
             await asyncio.gather(monitor, return_exceptions=True)
             await iterator.aclose()
+            # The relay releases these itself, but only if it ever started:
+            # with the end card sent straight away it never does. Both are
+            # idempotent.
+            relay_registry.close(claim.id)
+            engine.close()
 
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 

@@ -50,3 +50,24 @@ describe('football agenda field', () => {
     expect(payload).toHaveProperty('agenda_epg_id', 'futbolenlatv.dazn-laliga');
   });
 });
+
+describe('channel number in the edit form', () => {
+  const submit = (value: string) => {
+    const { result } = renderHook(() => useTVChannelForm());
+    act(() => result.current.handleOpenEditDialog(channel));
+    act(() => result.current.handleFormChange({ target: { name: 'channel_number', value, type: 'number', checked: false } } as unknown as React.ChangeEvent<HTMLInputElement>));
+    let payload: ReturnType<typeof result.current.validateForm> = null;
+    act(() => {
+      payload = result.current.validateForm();
+    });
+    return payload;
+  };
+
+  it('sends null when the number is emptied, so it is removed', () => {
+    expect(submit('')).toHaveProperty('channel_number', null);
+  });
+
+  it('keeps 0 as a number', () => {
+    expect(submit('0')).toHaveProperty('channel_number', 0);
+  });
+});

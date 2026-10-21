@@ -93,7 +93,7 @@ const TVChannelFormDialog: React.FC<TVChannelFormDialogProps> = ({
                 helperText="Matches shown over the regular guide, e.g. futbolenlatv.m-plus-laliga"
               />
             ) : null}
-            <TextField name="channel_number" label="Channel Number" type="number" fullWidth value={formData.channel_number || ''} onChange={onChange} />
+            <TextField name="channel_number" label="Channel Number" type="number" fullWidth value={formData.channel_number ?? ''} onChange={onChange} />
           </Stack>
         </Box>
 

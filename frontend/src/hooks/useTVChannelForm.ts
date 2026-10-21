@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TVChannel, TVChannelCreate, TVChannelUpdate } from '../types/tvChannelTypes';
+import { channelNumberPayload } from '../utils/channelNumber';
 
 export type TVChannelFormErrors = {
   name?: string;
@@ -78,6 +79,7 @@ export const useTVChannelForm = () => {
     country: sanitizeTextInput(formData.country),
     language: sanitizeTextInput(formData.language),
     epg_id: 'epg_id' in formData ? sanitizeTextInput(formData.epg_id) : undefined,
+    channel_number: channelNumberPayload(formData.channel_number),
     // Sent as null when emptied, so clearing the field removes the agenda
     // instead of being silently ignored.
     agenda_epg_id: 'agenda_epg_id' in formData

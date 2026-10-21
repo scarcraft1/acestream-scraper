@@ -174,6 +174,21 @@ class EPGSourceOperations:
 
         return results
 
+    def _tvrioja_week(self, url: str) -> bytes:
+        """TV Rioja's seven day pages, each converted and merged into one guide.
+
+        The page never states its date: dia=1..7 are Monday..Sunday (dia=4
+        and today's page were identical on Thursday 2026-10-15).
+        """
+        from app.services import tvrioja_guide
+        documents = []
+        for page in tvrioja_guide.page_urls(url):
+            validate_outbound_url(page)
+            response = source_get(page, timeout=30, allow_redirects=False)
+            response.raise_for_status()
+            documents.append(tvrioja_guide.html_to_xmltv(response.content, page))
+        return tvrioja_guide.merge_xmltv(documents)
+
     def _fetch_epg_from_source(self, source: EPGSource) -> Dict[str, Any]:
         """
         Fetch and parse EPG data from a specific source
@@ -213,6 +228,14 @@ class EPGSourceOperations:
             from app.services.football_agenda import html_to_xmltv, is_agenda_url
             if is_agenda_url(source.url):
                 content = html_to_xmltv(content)
+
+            # Channels in no XMLTV guide: TV Rioja's week as its newspaper
+            # publishes it (one page per day), and a channel's Sincroguia page.
+            from app.services import sincroguia_guide, tvrioja_guide
+            if tvrioja_guide.is_tvrioja_url(source.url):
+                content = self._tvrioja_week(source.url)
+            elif sincroguia_guide.is_sincroguia_url(source.url):
+                content = sincroguia_guide.html_to_xmltv(content, source.url)
 
             # Use the improved _process_epg_xml method
             channels_found, programs_found = self._process_epg_xml(source.id, content)

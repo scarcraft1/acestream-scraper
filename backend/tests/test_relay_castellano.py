@@ -56,7 +56,7 @@ def test_audio_tracks_stored_as_text_are_read():
 
 def _stream(db, key, tv, name, *, audio=None, online=True, hours_ago=1, bitrate=None, http=False):
     checked = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
-    sid = ("url:" + key * 8) if http else key * 40
+    sid = ("url:" + key * 40) if http else key * 40
     extra = {"stream_url": f"https://tv.example/{key}.m3u8"} if http else {}
     db.add(AcestreamChannel(id=sid, name=name, tv_channel_id=tv.id, is_online=online, is_active=True,
                             bitrate_bps=bitrate, last_checked=checked, audio_tracks=audio, **extra))
@@ -87,13 +87,30 @@ def test_castilian_beats_unmarked_and_bitrate_only_breaks_ties(db_session):
     assert TunerService(db_session).relay_stream_ids(tv.id) == [spain, elcano, de]
 
 
-def test_freshness_still_comes_first(db_session):
-    """A recently-checked foreign source is still tried before an old Castilian one."""
-    tv = _channel(db_session, "DAZN F1")
-    old_es = _stream(db_session, "a", tv, "DAZN F1 [ES]", hours_ago=70)
-    fresh_de = _stream(db_session, "b", tv, "Sky Sport F1 [DE]", hours_ago=1)
+def test_among_online_sources_language_beats_freshness(db_session):
+    """Eurosport 1 on the bench: the only source checked today was Russian, an
+    unmarked one was online the day before. Óscar chose the language."""
+    tv = _channel(db_session, "Eurosport 1")
+    fresh_ru = _stream(db_session, "a", tv, "Eurosport 1 HD [RU] --> SPORTV", hours_ago=2)
+    old_plain = _stream(db_session, "b", tv, "Eurosport 1 --> NEW ERA III", hours_ago=28)
     db_session.commit()
-    assert TunerService(db_session).relay_stream_ids(tv.id) == [fresh_de, old_es]
+    assert TunerService(db_session).relay_stream_ids(tv.id) == [old_plain, fresh_ru]
+
+
+def test_freshness_breaks_ties_within_the_same_language(db_session):
+    tv = _channel(db_session, "DAZN F1")
+    old_es = _stream(db_session, "a", tv, "DAZN F1 [ES]", hours_ago=70, bitrate=9_000_000)
+    fresh_es = _stream(db_session, "b", tv, "DAZN F1 HD [ES]", hours_ago=1, bitrate=2_000_000)
+    db_session.commit()
+    assert TunerService(db_session).relay_stream_ids(tv.id) == [fresh_es, old_es]
+
+
+def test_an_unchecked_castilian_source_still_goes_after_the_online_ones(db_session):
+    tv = _channel(db_session, "DAZN F1")
+    unchecked_es = _stream(db_session, "a", tv, "DAZN F1 [ES]", online=None, hours_ago=200)
+    online_de = _stream(db_session, "b", tv, "Sky Sport F1 [DE]", hours_ago=30)
+    db_session.commit()
+    assert TunerService(db_session).relay_stream_ids(tv.id) == [online_de, unchecked_es]
 
 
 def test_official_http_source_keeps_going_first(db_session):
@@ -112,3 +129,16 @@ def test_only_foreign_sources_are_still_played(db_session):
     de = _stream(db_session, "b", tv, "Eurosport 2 HD [DE]", bitrate=6_000_000)
     db_session.commit()
     assert TunerService(db_session).relay_stream_ids(tv.id) == [de, ru]
+
+
+def test_a_saved_stream_order_comes_before_the_language(db_session):
+    """#267: the order a person saved for the channel is the relay's order; the
+    language (and freshness) only rank the streams nobody ordered."""
+    tv = _channel(db_session, "Eurosport 1")
+    ru = _stream(db_session, "a", tv, "Eurosport 1 HD [RU] --> SPORTV")
+    es = _stream(db_session, "b", tv, "Eurosport 1 [ES]")
+    latino = _stream(db_session, "c", tv, "Eurosport 1 latino", hours_ago=48)
+    db_session.flush()
+    db_session.get(AcestreamChannel, ru).stream_order = 1
+    db_session.commit()
+    assert TunerService(db_session).relay_stream_ids(tv.id) == [ru, es, latino]

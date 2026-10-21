@@ -4,6 +4,8 @@ The sample is the real `dia=3` (Wednesday) page fetched on 2026-10-14. The
 page never states its date: it comes from the URL.
 """
 import time
+
+import pytest
 from datetime import date
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -137,3 +139,34 @@ def test_LA_SEMANA_ENTRA_COMO_UNA_SOLA_GUIA(monkeypatch):
     assert xml.count(b'<channel id="tvrioja.tvr"') == 1
     por_pagina = len(tv.rows(SAMPLE.decode("utf-8", "replace")))
     assert xml.count(b"<programme ") == 7 * por_pagina
+
+
+
+def test_UNA_PAGINA_QUE_NO_DA_200_HACE_FALLAR_LA_FUENTE_CON_SU_URL(monkeypatch):
+    """Sin seguir redirecciones, un 302 pasaba raise_for_status y su cuerpo
+    se leia como un dia vacio, sin decir por que."""
+    from types import SimpleNamespace
+    from app.services import epg_service
+    from app.services import epg_sources as epg_module
+
+    class Resp:
+        headers = {}
+        content = SAMPLE
+        is_redirect = is_permanent_redirect = False
+
+        def __init__(self, status):
+            self.status_code = status
+
+        def raise_for_status(self):
+            pass
+
+    def get(url, timeout=None, allow_redirects=False):
+        return Resp(302 if url.endswith("dia=3") else 200)
+
+    monkeypatch.setattr(epg_module, "source_get", get)
+    service = epg_service.EPGService(db=None)
+    monkeypatch.setattr(service, "_process_epg_xml", lambda *a: pytest.fail("no debe procesar"))
+    r = service._fetch_epg_from_source(SimpleNamespace(
+        id=1, url="https://proyectos.larioja.com/tvr/dimeprogramacion/dimeprogramacion.php?dia=0"))
+    assert r["success"] is False
+    assert "302" in r["error"] and "dia=3" in r["error"]

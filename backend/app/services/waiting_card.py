@@ -21,10 +21,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import time
 from functools import lru_cache
 from pathlib import Path
 from typing import AsyncIterator
+
+logger = logging.getLogger(__name__)
 
 CARD_PATH = Path(__file__).resolve().parent.parent / 'assets' / 'conectando.ts'
 CARD_SECONDS = 60.0
@@ -56,9 +59,15 @@ async def with_waiting_card(inner: AsyncIterator[bytes], card: bytes, *, after: 
                 continue
             due = min(len(card), int((showing + 1) * rate) // PACKET * PACKET)
             if due > sent:
+                if sent == 0:
+                    logger.info('TV relay waiting card started after %.1f s without video', time.monotonic() - started)
                 yield card[sent:due]
                 sent = due
-        yield first.result()
+        chunk = first.result()
+        if sent:
+            logger.info('TV relay waiting card ended: source spliced in after %.1f s (%d card bytes sent)',
+                        time.monotonic() - started, sent)
+        yield chunk
         async for chunk in inner:
             yield chunk
     finally:

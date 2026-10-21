@@ -403,10 +403,10 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             await asyncio.gather(monitor, return_exceptions=True)
             await iterator.aclose()
             # The relay releases these itself, but only if it ever started:
-            # with the end card sent straight away it never does. Both are
-            # idempotent.
-            relay_registry.close(claim.id)
-            engine.close()
+            # with the end card sent straight away it never does.
+            if any(info.id == claim.id for info in relay_registry.active()):
+                relay_registry.close(claim.id)
+                engine.close()
 
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 

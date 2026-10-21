@@ -294,23 +294,20 @@ async def test_DESPUES_DE_LA_CONECTANDO_TAMBIEN_SALE_LA_FINAL(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_EL_SEGUNDO_GET_DE_UN_CANAL_MUERTO_NO_PRUEBA_OTRA_VEZ(monkeypatch):
-    """Or Kodi's second GET would try every dead source again before the
-    end card: twice the wait for the same answer."""
+async def test_LO_RECIENTE_CADUCA_Y_SE_PURGA(monkeypatch):
+    monkeypatch.setattr(waiting_card, 'RECENT_SECONDS', 0.1)
+    waiting_card._remember(('k', 9), 'end')
+    assert waiting_card.recently(('k', 9)) == 'end'
+    await asyncio.sleep(0.15)
+    assert waiting_card.recently(('otro', 1)) is None
+    assert ('k', 9) not in waiting_card._recent
+
+
+@pytest.mark.asyncio
+async def test_LA_CARTA_FINAL_SOLA_ES_LA_CARTA_ENTERA(monkeypatch):
     monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
-    key = ('k', 3)
-    first = waiting_card.with_waiting_card(_source(0.05, fail=RuntimeError('no source')), CARD, after=5,
-                                           card_seconds=10, key=key, end_card=END,
-                                           end_errors=(RuntimeError,), end_seconds=0.2)
-    await anext(first)
-    await first.aclose()
-    log = []
-    second = waiting_card.with_waiting_card(_source(5, log=log), CARD, after=5, card_seconds=10, key=key,
-                                            end_card=END, end_errors=(RuntimeError,), end_seconds=0.2)
-    started = time.monotonic()
-    out = b''.join([c async for c in second])
-    assert out == END and time.monotonic() - started < 1
-    assert log == []                          # its relay never even started
+    out = b''.join([c async for c in waiting_card.end_card_stream(END, end_seconds=0.1)])
+    assert out == END
 
 
 @pytest.mark.asyncio
@@ -334,7 +331,7 @@ def test_LA_RUTA_PONE_LA_CARTA_FINAL_Y_LA_CLAVE_DEL_CLIENTE():
     from app.api.endpoints import tuner
     source = inspect.getsource(tuner.tuner_channel)
     assert 'end_card=await run_in_threadpool(waiting_card.load_end_card)' in source
-    assert 'key=(request.client.host' in source and 'tv_channel_id)' in source
+    assert "key = (request.client.host if request.client else '?', tv_channel_id)" in source and 'key=key' in source
 
 
 def test_DOS_GET_A_UN_CANAL_MUERTO_CARTA_FINAL_Y_NINGUN_SINTONIZADOR_OCUPADO(alembic_db_session, alembic_client, monkeypatch):
@@ -370,11 +367,20 @@ def test_DOS_GET_A_UN_CANAL_MUERTO_CARTA_FINAL_Y_NINGUN_SINTONIZADOR_OCUPADO(ale
             finally:
                 tuner.relay_registry.close(claim.id)
         monkeypatch.setattr(tuner, 'relay_ranked_streams', ranked)
+        claims = []
+        real_try_open = tuner.relay_registry.try_open
+        monkeypatch.setattr(tuner.relay_registry, 'try_open',
+                            lambda *a, **k: claims.append(a) or real_try_open(*a, **k))
+        engines = []
+        monkeypatch.setattr(tuner, '_engine', lambda: engines.append(1) or Mock())
         end = waiting_card.load_end_card()
         for _ in range(2):
             response = alembic_client.get(f'/tuner/channel/{tv.id}.ts')
             assert response.status_code == 200 and response.content == end
         assert len(tries) == 1
+        # The second one took no tuner slot and opened no engine (kodi-8f,
+        # 16-10): someone zapping elsewhere may need the slot meanwhile.
+        assert len(claims) == 1 and len(engines) == 1
         assert tuner.relay_registry.active() == []
     finally:
         get_settings.cache_clear(); get_tuner_gate.cache_clear()

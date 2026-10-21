@@ -53,11 +53,24 @@ def _remember(key, what: str) -> None:
         _recent[key] = (what, time.monotonic())
 
 
-def _recently(key) -> str | None:
+def recently(key) -> str | None:
+    """'card' or 'end' if the last GET of this client and channel did that
+    less than RECENT_SECONDS ago. Also when someone zaps back within 5 s:
+    a channel that was slow shows «Conectando…» from 0 even if it opens
+    fast this time -- a flicker, then the splice (kodi-8f, 16-10)."""
+    now = time.monotonic()
+    for old in [k for k, (_, at) in _recent.items() if now - at >= RECENT_SECONDS]:
+        _recent.pop(old, None)
     seen = _recent.get(key) if key is not None else None
-    if seen and time.monotonic() - seen[1] < RECENT_SECONDS:
-        return seen[0]
-    return None
+    return seen[0] if seen else None
+
+
+async def end_card_stream(end_card: bytes, end_seconds: float | None = None) -> AsyncIterator[bytes]:
+    """Only the end card: for Kodi's second GET of a channel the first one
+    just found dead. The route sends it without a tuner slot or engine."""
+    logger.info('TV relay: no source left a moment ago, end card sent again')
+    async for chunk in _paced(end_card, END_CARD_SECONDS if end_seconds is None else end_seconds):
+        yield chunk
 
 
 @lru_cache(maxsize=1)
@@ -105,21 +118,13 @@ async def with_waiting_card(inner: AsyncIterator[bytes], card: bytes, *, after: 
     it was a 502 and Kodi showed «Playback failed», with an OK to press; a
     clean end goes back to the menu (kodi-local-2, 16-10). Without it, the
     error passes through. `key` (client and channel) is what lets Kodi's
-    second GET skip the wait: see RECENT_SECONDS.
+    second GET skip the wait: see RECENT_SECONDS. The 'end' memory is noted
+    when the end card STARTS, and Kodi's second GET comes as soon as the
+    first has data, well inside RECENT_SECONDS; mind it if END_CARD_SECONDS
+    ever grows (kodi-8f, 16-10). `end_errors` only with `end_card`.
     """
     end_seconds = END_CARD_SECONDS if end_seconds is None else end_seconds
-    if end_card is not None and _recently(key) == 'end':
-        # The first GET already found nothing a moment ago: not again. Its
-        # relay never starts, so the route releases the tuner slot itself.
-        logger.info('TV relay: no source left a moment ago, end card sent again')
-        try:
-            async for chunk in _paced(end_card, end_seconds):
-                yield chunk
-        finally:
-            with anyio.CancelScope(shield=True):
-                await inner.aclose()
-        return
-    if _recently(key) == 'card':
+    if recently(key) == 'card':
         after = 0
     rate = len(card) / card_seconds
     last_data = time.monotonic()
@@ -134,7 +139,7 @@ async def with_waiting_card(inner: AsyncIterator[bytes], card: bytes, *, after: 
                     chunk = pending.result()
                 except StopAsyncIteration:
                     return
-                except end_errors if end_card is not None else () as exc:
+                except end_errors as exc:
                     logger.info('TV relay ended: no source left, end card sent (%s)', exc)
                     _remember(key, 'end')
                     async for end_chunk in _paced(end_card, end_seconds):

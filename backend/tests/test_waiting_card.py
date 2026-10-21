@@ -36,13 +36,19 @@ async def test_UN_CANAL_QUE_ARRANCA_A_TIEMPO_NO_VE_LA_CARTA(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_UNO_LENTO_VE_LA_CARTA_Y_LUEGO_EL_CANAL(monkeypatch):
+async def test_UNO_LENTO_VE_LA_CARTA_Y_LUEGO_EL_CANAL(monkeypatch, caplog):
+    """And the log says so: on the bench nobody could tell «not sent» from
+    «sent and not painted» (kodi-0c, 15-10)."""
+    caplog.set_level('INFO', logger='app.services.waiting_card')
     monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
     out = [c async for c in waiting_card.with_waiting_card(_source(0.4), CARD, after=0.1, card_seconds=10)]
     card_bytes = b''.join(out[:-2])
     assert out[-2:] == [b'real-1', b'real-2']
     assert card_bytes and CARD.startswith(card_bytes)
     assert len(card_bytes) % 188 == 0       # whole packets only, so the splice is clean
+    messages = [r.getMessage() for r in caplog.records]
+    assert any(m.startswith('TV relay waiting card started') for m in messages)
+    assert any(m.startswith('TV relay waiting card ended') and f'({len(card_bytes)} card bytes sent)' in m for m in messages)
 
 
 @pytest.mark.asyncio

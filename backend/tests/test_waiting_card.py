@@ -197,3 +197,36 @@ def test_LA_RUTA_LA_PIDE_EN_PLENA_EMISION():
     # Exactly when the relay gives the source up: before that, a healthy
     # low-bitrate source is just between two pieces.
     assert 'midstream_after=tuner_playback_service.STALL_SECONDS' in inspect.getsource(tuner.tuner_channel)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('when', ['before_video', 'while_playing'])
+async def test_SI_EL_SERVIDOR_CANCELA_LA_RESPUESTA_EL_RELE_SE_CIERRA(monkeypatch, when):
+    """How Kodi leaves: the server cancels the response with an anyio scope,
+    which re-delivers the cancellation at every await. Measured on the box
+    (kodi-0c, 15-10, 13:03): after Kodi closed, no stop and no linger, and the
+    engine kept downloading -- the wrapper's cleanup was itself cancelled
+    before it closed the relay inside."""
+    import anyio
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    log = []
+
+    async def inner():
+        try:
+            if when == 'while_playing':
+                yield b'real-0'
+            await asyncio.sleep(10)
+            yield b'never'
+        finally:
+            await asyncio.sleep(0.01)        # cleanup that has to await, like the engine stop
+            log.append('closed')
+
+    got = []
+
+    async def consume():
+        async for chunk in waiting_card.with_waiting_card(inner(), CARD, after=5, midstream_after=5, card_seconds=10):
+            got.append(chunk)
+    with anyio.move_on_after(0.2):
+        await consume()
+    await asyncio.sleep(0.1)
+    assert log == ['closed']

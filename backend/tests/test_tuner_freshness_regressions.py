@@ -105,6 +105,10 @@ def test_streaming_route_uses_freshness_and_releases_claim(
         ("b", False, NOW - timedelta(hours=1 if all_recent_offline else 12), 100),
         ("c", False, NOW - timedelta(minutes=1), 1000),
     ])
+    # Without the fork's waiting and end cards: with them, a channel whose
+    # sources run out gets the «Sin señal» card after the last packet.
+    from app.repositories.settings_repository import SettingsRepository
+    SettingsRepository(alembic_db_session).set_setting(SettingsRepository.TUNER_WAITING_CARD_SECONDS, "0")
     attempts, cleaned = [], []
     engine = Mock()
     engine_factory = Mock(return_value=engine)

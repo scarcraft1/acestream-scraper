@@ -122,3 +122,76 @@ async def test_SI_KODI_SE_VA_YA_VIENDO_EL_CANAL_TAMBIEN_SE_CIERRA(monkeypatch):
     assert await anext(stream) == b'real-1'
     await stream.aclose()
     assert log == ['closed']
+
+
+# --- once the channel is playing ---------------------------------------------
+
+async def _playing(gaps, log=None):
+    """b'real-0', then after each gap another real chunk."""
+    try:
+        yield b'real-0'
+        for i, gap in enumerate(gaps, 1):
+            await asyncio.sleep(gap)
+            yield f'real-{i}'.encode()
+    finally:
+        if log is not None:
+            log.append('closed')
+
+
+def _split(out):
+    return [('card' if c.startswith(b'\x47') else c.decode()) for c in out]
+
+
+@pytest.mark.asyncio
+async def test_EN_PLENA_EMISION_UN_SILENCIO_LARGO_SALE_CON_CARTA(monkeypatch):
+    """Measured on the box: M+ LaLiga stopped 4 s in and Kodi showed the
+    last frame for over a minute while the relay searched."""
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    out = [c async for c in waiting_card.with_waiting_card(_playing([0.4]), CARD, after=5,
+                                                           midstream_after=0.1, card_seconds=10)]
+    kinds = _split(out)
+    assert kinds[0] == 'real-0' and kinds[-1] == 'real-1'
+    assert set(kinds[1:-1]) == {'card'}
+
+
+@pytest.mark.asyncio
+async def test_UN_HUECO_CORTO_NO_SACA_CARTA(monkeypatch):
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    out = [c async for c in waiting_card.with_waiting_card(_playing([0.05, 0.05]), CARD, after=5,
+                                                           midstream_after=0.3, card_seconds=10)]
+    assert _split(out) == ['real-0', 'real-1', 'real-2']
+
+
+@pytest.mark.asyncio
+async def test_SIN_PEDIRLA_EN_PLENA_EMISION_NO_SALE(monkeypatch):
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    out = [c async for c in waiting_card.with_waiting_card(_playing([0.4]), CARD, after=0.05, card_seconds=10)]
+    assert _split(out) == ['real-0', 'real-1']
+
+
+@pytest.mark.asyncio
+async def test_CADA_SILENCIO_EMPIEZA_LA_CARTA_DESDE_EL_PRINCIPIO(monkeypatch):
+    """A card resumed mid-file would carry timestamps from the last silence."""
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+    numbered = b''.join(bytes([0x47, i]) + bytes(186) for i in range(100))
+    out = [c async for c in waiting_card.with_waiting_card(_playing([0.3, 0.3]), numbered, after=5,
+                                                           midstream_after=0.1, card_seconds=10)]
+    firsts = [out[i + 1][:2] for i, c in enumerate(out[:-1]) if not c.startswith(b'\x47')]
+    assert firsts == [bytes([0x47, 0]), bytes([0x47, 0])]
+
+
+@pytest.mark.asyncio
+async def test_SI_LA_FUENTE_ACABA_DURANTE_LA_CARTA_TERMINA_LIMPIO(monkeypatch):
+    monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
+
+    async def ends():
+        yield b'real-0'
+        await asyncio.sleep(0.3)
+    out = [c async for c in waiting_card.with_waiting_card(ends(), CARD, after=5, midstream_after=0.1, card_seconds=10)]
+    assert _split(out)[0] == 'real-0' and set(_split(out)[1:]) == {'card'}
+
+
+def test_LA_RUTA_LA_PIDE_EN_PLENA_EMISION():
+    import inspect
+    from app.api.endpoints import tuner
+    assert 'midstream_after=waiting_card.MIDSTREAM_AFTER_SECONDS' in inspect.getsource(tuner.tuner_channel)

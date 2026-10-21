@@ -353,8 +353,11 @@ async def tuner_channel(tv_channel_id: int, request: Request):
                                       startup_budget_seconds=budget,
                                       switch_midstream=await run_in_threadpool(_switch_on_failure))
         if card_after > 0:
+            # Also when a playing source goes silent and the relay looks for
+            # another: the card instead of the last frame frozen on screen.
             iterator = waiting_card.with_waiting_card(iterator, await run_in_threadpool(waiting_card.load_card),
-                                                      after=card_after)
+                                                      after=card_after,
+                                                      midstream_after=waiting_card.MIDSTREAM_AFTER_SECONDS)
         first = await anext(iterator)
     except BaseException as exc:
         monitor.cancel()

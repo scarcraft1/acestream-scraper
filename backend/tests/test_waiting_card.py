@@ -194,4 +194,6 @@ async def test_SI_LA_FUENTE_ACABA_DURANTE_LA_CARTA_TERMINA_LIMPIO(monkeypatch):
 def test_LA_RUTA_LA_PIDE_EN_PLENA_EMISION():
     import inspect
     from app.api.endpoints import tuner
-    assert 'midstream_after=waiting_card.MIDSTREAM_AFTER_SECONDS' in inspect.getsource(tuner.tuner_channel)
+    # Exactly when the relay gives the source up: before that, a healthy
+    # low-bitrate source is just between two pieces.
+    assert 'midstream_after=tuner_playback_service.STALL_SECONDS' in inspect.getsource(tuner.tuner_channel)

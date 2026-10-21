@@ -33,11 +33,6 @@ CARD_PATH = Path(__file__).resolve().parent.parent / 'assets' / 'conectando.ts'
 CARD_SECONDS = 60.0
 PACKET = 188
 STEP_SECONDS = 0.2
-# Silence once video has flowed before the card replaces the frozen picture.
-# The relay itself gives a source STALL_SECONDS (15) before moving on; a
-# shorter wait here covers that search. Provisional until the gaps of a
-# healthy source on the box are measured.
-MIDSTREAM_AFTER_SECONDS = 8.0
 
 
 @lru_cache(maxsize=1)

@@ -42,16 +42,17 @@ def configure_bionic_dns():
     The jopsis 3.2.17 distribution includes dnsproxyd for this purpose because
     Android bionic does not use glibc's resolver configuration directly.
     Older official APK payloads do not include the helper and simply retain
-    their existing behavior.
+    their existing behavior. Where it exists, bionic_dns answers its socket
+    instead of the helper's own listener.
     """
     try:
         import dns.resolver
-        from dnsproxyd import dnsproxyd_listener
-        from bionic_dns import container_resolver, start_shared_dns
+        import dnsproxyd  # noqa: F401 -- only payloads that ship it expect the socket
+        from bionic_dns import container_resolver, dnsproxy_listener, start_shared_dns
 
         resolver = container_resolver(dns.resolver.Resolver, log)
         dns.resolver.override_system_resolver(resolver)
-        start_shared_dns(dnsproxyd_listener, resolver)
+        start_shared_dns(dnsproxy_listener(log), resolver)
         log("bionic DNS resolver configured")
     except Exception as exc:
         log("bionic DNS resolver unavailable: {}".format(exc))

@@ -212,9 +212,10 @@ class TunerService:
         return list(dict.fromkeys(_relay_id(stream) for stream in valid))
 
     def relay_stream_ids(self, tv_channel_id: int) -> List[str]:
-        """What the TV relay tries, in order: online and checked recently;
-        online from an old check; then never checked, or offline from an old
-        check. Only a source found offline recently is left out.
+        """What the TV relay tries, in order: sources seen online (recently or
+        not), then never checked or offline from an old check. Within each,
+        official HTTP first, then by language (Castilian first), then a recent
+        check, then bitrate. Only a source found offline recently is left out.
 
         When a box that is only on now and then is switched on for a match,
         every status is hours or days old, and the source that is live tonight may be the one the
@@ -231,17 +232,21 @@ class TunerService:
                 continue
             fresh = _checked_since(stream, fresh_since, now)
             if stream.is_online:
-                bucket = 0 if fresh else 1
+                group = 0
             elif stream.is_online is False and fresh:
                 continue
             else:
-                bucket = 2
-            # Within a group an official HTTP source goes first: it opens in
-            # about a second, an acestream in 3 to 17 s on an A55 box. Then
-            # Castilian, and other languages or Latin American Spanish last
-            # (stream_language_rank), before bitrate.
+                group = 1
+            # Among sources seen online, recent or not, the language decides
+            # before freshness (Óscar, 20-10): on Eurosport 1 the only source
+            # checked that day was Russian and an unmarked one had been online
+            # the day before. If that one is gone, the relay moves on after one
+            # attempt. Within that: an official HTTP source first (it opens in
+            # about a second, an acestream in 3 to 17 s on an A55 box), then
+            # Castilian, unmarked, other languages and Latino
+            # (stream_language_rank), then a recent check, then bitrate.
             http = stream.id.startswith("url:")
-            ranked.append((bucket, not http, stream_language_rank(stream),
+            ranked.append((group, not http, stream_language_rank(stream), not fresh,
                            -(stream.bitrate_bps or 0), _relay_id(stream)))
         return list(dict.fromkeys(entry[-1] for entry in sorted(ranked)))
 

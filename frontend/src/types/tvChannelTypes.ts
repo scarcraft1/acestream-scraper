@@ -9,6 +9,8 @@ export interface TVChannelBase {
   language?: string;
   website?: string;
   epg_id?: string;
+  /** Guide channel of a football agenda source, laid over the regular guide. */
+  agenda_epg_id?: string | null;
   channel_number?: number | null;
 }
 
@@ -27,6 +29,8 @@ export interface TVChannelUpdate {
   language?: string;
   website?: string;
   epg_id?: string;
+  /** null removes the agenda; an empty field must clear it, not be ignored. */
+  agenda_epg_id?: string | null;
   is_active?: boolean;
   is_favorite?: boolean;
   channel_number?: number | null;

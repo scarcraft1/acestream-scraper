@@ -271,13 +271,23 @@ async def tuner_stream(content_id: str, request: Request):
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 
 
-def _refresh_while_playing() -> bool:
+def _setting_on(key: str) -> bool:
     db = SessionLocal()
     try:
-        value = SettingsRepository(db).get_setting("tuner_refresh_while_playing") or "true"
+        value = SettingsRepository(db).get_setting(key) or "true"
         return str(value).lower() not in ("false", "0", "no")
     finally:
         db.close()
+
+
+def _refresh_while_playing() -> bool:
+    return _setting_on("tuner_refresh_while_playing")
+
+
+def _switch_on_failure() -> bool:
+    # When the playing source stops sending, go on with another one in the
+    # same response instead of ending it. Óscar chose this on 2026-10-14.
+    return _setting_on("tuner_switch_on_failure")
 
 
 def _channel_candidates(tv_channel_id: int, *, include_offline: bool = False) -> List[str]:
@@ -347,7 +357,8 @@ async def tuner_channel(tv_channel_id: int, request: Request):
                                       experimental_transcoding=experimental_transcoding,
                                       plex_compatible_audio=relay_settings.plex_compatible_audio,
                                       attempt_seconds=relay_settings.source_start_seconds,
-                                      startup_budget_seconds=relay_settings.startup_budget_seconds)
+                                      startup_budget_seconds=relay_settings.startup_budget_seconds,
+                                      switch_midstream=await run_in_threadpool(_switch_on_failure))
         first = await anext(iterator)
     except BaseException as exc:
         monitor.cancel()

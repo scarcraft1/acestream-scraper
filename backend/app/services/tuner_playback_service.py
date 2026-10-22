@@ -15,6 +15,7 @@ from app.services.engine_client import EngineClient, EngineRefusedError, EngineU
 from app.services.stream_relay import EngineStreamError, RelayInfo, RelayRegistry, relay_engine_stream, relay_registry
 from app.services.tuner_remux import remux_source
 from app.services.http_relay import is_http_source, relay_http_stream
+from app.services.ts_clock import watch_clock
 
 STARTUP_BUDGET_SECONDS = 45.0
 ATTEMPT_SECONDS = 15.0
@@ -126,6 +127,9 @@ async def relay_ranked_streams(
                 raw = relay_engine_stream(engine, content_id, client_label, registry=registry,
                     client_factory=client_factory, claim=claim, release_claim=False,
                     stop_linger=stop_linger, read_seconds=attempt_seconds)
+            # Log the source's own clock jumps (a viewer saw sources jump back
+            # mid-match with no relay switch, and nothing showed it): read-only.
+            raw = watch_clock(raw, content_id)
             iterator = remux_source(raw, version=version, offset=time.monotonic() - started) if experimental_transcoding else raw
             version += 1
             first_at = last_at = None

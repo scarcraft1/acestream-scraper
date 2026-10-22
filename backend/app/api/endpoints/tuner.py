@@ -33,6 +33,7 @@ from app.services.stream_relay import RELAY_HEADERS, ClosingStreamingResponse, E
 from app.services.tuner_network import get_tuner_gate, require_tuner_network
 from app.services.tuner_service import TunerService
 from app.services.tuner_playback_service import relay_ranked_streams, prefer_recovered_sources
+from app.services.ts_clock import watch_clock
 from app.services.tuner_remux import ffmpeg_binary
 from app.services.tuner_probe_service import tuner_probe_service
 from app.services import tuner_playback_service, waiting_card
@@ -226,7 +227,7 @@ async def tuner_stream(content_id: str, request: Request):
             engine = await run_in_threadpool(_engine)
         except EngineUnavailableError as exc:
             raise APIError(code="ENGINE_UNAVAILABLE", message=str(exc), status_code=502, context={"content_id": content_id}) from exc
-        iterator = relay_engine_stream(engine, content_id, f"tuner:{peer}", client_factory=_relay_client_factory, claim=claim)
+        iterator = watch_clock(relay_engine_stream(engine, content_id, f"tuner:{peer}", client_factory=_relay_client_factory, claim=claim), content_id)
         # The first chunk is pulled here so an engine failure becomes a 502 body
         # instead of a truncated 200 stream. Every path that does not hand the
         # iterator to a response closes the engine's connection pool itself.

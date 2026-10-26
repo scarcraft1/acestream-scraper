@@ -110,6 +110,11 @@ PYTHONPATH=backend alembic -c backend/migrations/alembic.ini upgrade head
   end spends it, and the relay giving the chosen source up spends it at once
   (independent of the failure memory). Refreshed candidates leave it out: never
   back to it. Process memory only. Keep the ordering in the service, not the route.
+- `GET /api/v1/player/streams` gives each relay a `source_state`: `probing` from
+  the moment the relay books a source (`RelayRegistry.select_stream`) until that
+  source delivers its first bytes, `playing` after (`source_playing`), and
+  `probing` again on every automatic switch. The waiting card's bytes never
+  count: it wraps the ranked relay from outside. Browser sessions give null.
 - Bitrate/audio probes must stay bounded and restrict every HTTP redirect to the
   engine host before issuing it. ffprobe consumes a byte sample through stdin,
   never an upstream URL. Missing metadata is unknown, not zero bitrate.

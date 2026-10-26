@@ -3,9 +3,10 @@ source X (acestream-tvbox #12, #20).
 
 The Kodi skin asks for it with a short HTTP request and then opens the
 channel through the PVR as always. The request is per device (client IP),
-lasts 30 s from when it was made and is not used up by the first GET: Kodi
-opens a channel with a HEAD and two GETs.
+lasts 30 s from when it was made and covers one opening only: Kodi's HEAD and
+both GETs start with it, a later GET does not.
 """
+from collections import OrderedDict
 from unittest.mock import Mock
 
 import pytest
@@ -14,7 +15,13 @@ from app.models.models import AcestreamChannel, TVChannel
 
 
 @pytest.fixture
-def channel(alembic_client, alembic_db_session, monkeypatch):
+def channel_failing():
+    """Sources the fake relay gives up (on_source_failure) before going on."""
+    return set()
+
+
+@pytest.fixture
+def channel(channel_failing, alembic_client, alembic_db_session, monkeypatch):
     """A channel with an online source, one a check found offline a moment
     ago (the relay leaves it out) and a source of another channel; the relay
     replaced by one that records the candidates it was given."""
@@ -26,8 +33,8 @@ def channel(alembic_client, alembic_db_session, monkeypatch):
     from app.services.tuner_network import get_tuner_gate
     monkeypatch.setenv('TUNER_ALLOWED_NETWORKS', '*')
     get_settings.cache_clear(); get_tuner_gate.cache_clear()
-    monkeypatch.setattr(tuner_first_source, '_requests', {})
-    monkeypatch.setattr('app.services.tuner_playback_service._failures', __import__('collections').OrderedDict())
+    monkeypatch.setattr(tuner_first_source, '_choices', {})
+    monkeypatch.setattr('app.services.tuner_playback_service._failures', OrderedDict())
     tv = TVChannel(name='DAZN 1', is_active=True)
     other = TVChannel(name='DAZN 2', is_active=True)
     alembic_db_session.add_all([tv, other]); alembic_db_session.flush()
@@ -41,16 +48,18 @@ def channel(alembic_client, alembic_db_session, monkeypatch):
     monkeypatch.setattr(tuner.tuner_probe_service, 'start', Mock(return_value=None))
     monkeypatch.setattr(tuner, '_engine', lambda: Mock())
     calls = []
+    failing = channel_failing
 
-    async def ranked(_engine, ids, _label, claim, *, candidate_provider, **kwargs):
+    async def ranked(_engine, ids, _label, claim, *, candidate_provider, on_source_failure, **kwargs):
         try:
             calls.append({'ids': list(ids), 'provider': candidate_provider})
+            if ids[0] in failing:
+                await on_source_failure(ids[0])
             yield b'video'
         finally:
             relay_registry.close(claim.id)
     monkeypatch.setattr(tuner, 'relay_ranked_streams', ranked)
     yield tv, calls
-    monkeypatch.undo()
     get_settings.cache_clear(); get_tuner_gate.cache_clear()
 
 
@@ -146,3 +155,46 @@ def test_once_tried_the_relay_is_never_offered_it_again(alembic_client, channel)
     assert calls[0]['ids'] == ['a' * 40]
     current, _refreshing = asyncio.run(calls[0]['provider']())
     assert 'a' * 40 not in current
+
+
+def test_zapping_away_and_back_after_it_played_is_automatic(alembic_client, channel, monkeypatch):
+    """Only that opening: once Kodi's GETs of it are over, changing channel
+    and coming back within the 30 s uses the automatic order."""
+    from app.services import tuner_first_source
+    tv, calls = channel
+    now = [1000.0]
+    monkeypatch.setattr(tuner_first_source.time, 'monotonic', lambda: now[0])
+    _ask(alembic_client, tv.id, 'b' * 40)
+    alembic_client.get(f'/tuner/channel/{tv.id}.ts')
+    now[0] += 10
+    alembic_client.get(f'/tuner/channel/{tv.id}.ts')
+    assert [call['ids'] for call in calls] == [['b' * 40, 'a' * 40], ['a' * 40]]
+
+
+def test_a_chosen_source_that_failed_is_not_first_on_the_next_get(alembic_client, channel, channel_failing,
+                                                                   monkeypatch):
+    """Not even within the moment left for Kodi's second GET, and not
+    because of the relay's failure memory: with it off, still not first."""
+    from app.services import tuner_playback_service
+    monkeypatch.setattr(tuner_playback_service, 'FAILURE_COOLDOWN_SECONDS', 0)
+    tv, calls = channel
+    channel_failing.add('b' * 40)
+    _ask(alembic_client, tv.id, 'b' * 40)
+    alembic_client.get(f'/tuner/channel/{tv.id}.ts')
+    alembic_client.get(f'/tuner/channel/{tv.id}.ts')
+    assert [call['ids'] for call in calls] == [['b' * 40, 'a' * 40], ['a' * 40]]
+
+
+def test_kodi_overlapping_gets_share_it_and_then_it_is_spent(monkeypatch):
+    """Kodi's second GET may start before the first one closes: both start
+    with the chosen source, and once both have ended it is spent, even
+    within the moment a second GET gets."""
+    from app.services import tuner_first_source
+    monkeypatch.setattr(tuner_first_source, '_choices', {})
+    tuner_first_source.choose_first_source('10.0.0.9', 7, 'b' * 40)
+    first = tuner_first_source.open_channel('10.0.0.9', 7)
+    second = tuner_first_source.open_channel('10.0.0.9', 7)
+    first.ended()
+    second.ended()
+    assert (first.chosen, second.chosen) == ('b' * 40, 'b' * 40)
+    assert tuner_first_source.open_channel('10.0.0.9', 7).chosen is None

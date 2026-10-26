@@ -183,7 +183,8 @@ The current product already points toward a structured operational dashboard: Ma
 `services/tuner_playback_service.py` tries active, valid sources returned by
 `TunerService.relay_stream_ids()`: sources seen online (recent or stale), then
 unknown/stale offline. Recent explicit offline results
-are excluded. Freshness covers the last six hours; future timestamps are stale.
+are excluded, except a source a person chose for the next opening
+(`tuner_first_source`; see `backend/AGENTS.md`). Freshness covers the last six hours; future timestamps are stale.
 Recent relay failures still deprioritize a source.
 Within each group an official HTTP source goes first, then
 `stream_ranking.stream_language_rank` (Castilian, no evidence, then other languages and

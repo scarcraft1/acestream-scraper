@@ -84,8 +84,8 @@ PYTHONPATH=backend alembic -c backend/migrations/alembic.ini upgrade head
 ## Tuner and player media selection
 
 - Stable tuner channel URLs rank active, valid sources by freshness: recent online,
-  stale online, then unknown/stale offline. Recent offline is excluded; future
-  timestamps are stale. Freshness is six hours; bitrate breaks ties within each
+  stale online, then unknown/stale offline. Recent offline is excluded (except a
+  source a person chose, below); future timestamps are stale. Freshness is six hours; bitrate breaks ties within each
   group. Recent playback failures still deprioritize sources. Startup retries
   retain one tuner slot and close every failed
   engine session. Default midstream failures end the response for client reconnect;
@@ -93,6 +93,16 @@ PYTHONPATH=backend alembic -c backend/migrations/alembic.ini upgrade head
   enables recovery within the connection through FFmpeg with new table
   versions and discontinuity signalling; never concatenate raw source bytes. Keep
   one tuner slot, bounded retries, and deterministic process/source cleanup.
+- «Starts with» (`services/tuner_first_source.py`, `POST`/`DELETE
+  /tuner/channel/{id}/first-source`): a source a person chose goes first for the
+  next opening of that channel from that device, even if recently offline, unless
+  the relay saw it fail in the last 60 s. The key is the client IP the fork sees:
+  clients entering through the Docker gateway share one choice. It lasts 30 s and
+  only that opening: Kodi's HEAD and both GETs must see it, so a GET does not use
+  it up; the first GET to end leaves `STOP_LINGER_SECONDS` for the second, the next
+  end spends it, and the relay giving the chosen source up spends it at once
+  (independent of the failure memory). Refreshed candidates leave it out: never
+  back to it. Process memory only. Keep the ordering in the service, not the route.
 - Bitrate/audio probes must stay bounded and restrict every HTTP redirect to the
   engine host before issuing it. ffprobe consumes a byte sample through stdin,
   never an upstream URL. Missing metadata is unknown, not zero bitrate.

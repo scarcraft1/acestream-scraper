@@ -151,6 +151,9 @@ async def relay_ranked_streams(
                 with anyio.fail_after(min(attempt_seconds, max(.001, deadline - time.monotonic()))) as timer[0]:
                     first = await anext(iterator)
                 first_at = last_at = time.monotonic()
+                # Bytes of the source itself (the waiting card wraps this
+                # iterator from outside): from here on the source plays.
+                registry.source_playing(claim.id)
                 yield first
                 while True:
                     with anyio.fail_after(STALL_SECONDS) as timer[0]:

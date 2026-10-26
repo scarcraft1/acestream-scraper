@@ -331,7 +331,7 @@ def test_LA_RUTA_PONE_LA_CARTA_FINAL_Y_LA_CLAVE_DEL_CLIENTE():
     from app.api.endpoints import tuner
     source = inspect.getsource(tuner.tuner_channel)
     assert 'end_card=await run_in_threadpool(waiting_card.load_end_card)' in source
-    assert "key = (request.client.host if request.client else '?', tv_channel_id)" in source and 'key=key' in source
+    assert 'key = (_client_address(request), tv_channel_id)' in source and 'key=key' in source
 
 
 def test_DOS_GET_A_UN_CANAL_MUERTO_CARTA_FINAL_Y_NINGUN_SINTONIZADOR_OCUPADO(alembic_db_session, alembic_client, monkeypatch):

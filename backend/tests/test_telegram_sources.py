@@ -285,7 +285,9 @@ def test_migration_upgrade_downgrade_preserves_existing_streams(tmp_path):
             assert connection.execute(text('SELECT name FROM acestream_channels')).scalar() == 'Manual'
             assert connection.execute(text('SELECT name, revision FROM w3u_catalogues')).one() == ('Saved catalogue', 3)
             assert connection.execute(text('SELECT id, followed FROM sporting_events')).one() == ('match', 1)
-            assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar() == '20261023_1400'
+            # The fork's agenda column is a branch of its own (fork_20261027_merge):
+            # downgrading develop's line leaves it applied, as a second row.
+            assert '20261023_1400' in connection.execute(text('SELECT version_num FROM alembic_version')).scalars().all()
         upgrade_to_head(path)
         assert {'telegram_sources', 'telegram_observations'} <= set(inspect(engine).get_table_names())
     finally:

@@ -68,6 +68,11 @@ def test_http_only_tuner_get_works_without_engine_and_head_has_no_side_effects(a
     engine = Mock(side_effect=EngineUnavailableError('No configured engine'))
     monkeypatch.setattr(tuner, '_engine', engine)
     monkeypatch.setattr(tuner.tuner_probe_service, 'start', refresh)
+    # Without the fork's waiting card: with it, the one source ending is
+    # followed by the «Sin señal» end card instead of the bare end of response.
+    import dataclasses
+    real_settings = TunerService.settings
+    monkeypatch.setattr(TunerService, 'settings', lambda self: dataclasses.replace(real_settings(self), waiting_card_seconds=0))
     opened = []
     async def http(cid, claim, **kwargs):
         opened.append(cid)

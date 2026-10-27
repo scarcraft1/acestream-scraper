@@ -10,14 +10,15 @@
 # BASE_IMAGE is pinned by digest on purpose: a floating tag would update the
 # engine and everything else behind the user's back. The default is the
 # multi-arch index of the `develop` image every test of this fork ran on
-# (built 2026-10-09). A box that must keep the image it already has passes
+# (built 2026-10-27 07:33 UTC, after develop db25aaa; the image carries
+# no commit label). A box that must keep the image it already has passes
 # its own digest:
 #
 #   docker build -f Dockerfile.fork --build-arg BASE_IMAGE=docker.io/pipepito/acestream-scraper@sha256:<its digest> .
 #
 # With podman, add `--format docker`: the default OCI format drops the
 # upstream HEALTHCHECK without failing.
-ARG BASE_IMAGE=docker.io/pipepito/acestream-scraper@sha256:f7a91ffa8217e3cfe962c418d7165600152a6a3e28fb255d57b2eb81f9d1aad8
+ARG BASE_IMAGE=docker.io/pipepito/acestream-scraper@sha256:c7873027429afdefeb40ce6f6043b8a837871b0a8fba38877d2ad849036b8f9b
 
 FROM --platform=$BUILDPLATFORM docker.io/library/node:20-slim AS interface
 WORKDIR /src

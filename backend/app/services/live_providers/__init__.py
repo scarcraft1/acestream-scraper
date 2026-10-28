@@ -2,7 +2,9 @@
 
 Adding a broadcaster's website as a scraper source (https://www.atresplayer.com,
 https://www.mediasetinfinity.es, https://www.7riojaplay.tv,
-https://www.telemadrid.es) imports its channels like any M3U list: the
+https://www.telemadrid.es; for free ad-supported channels in Spain,
+https://pluto.tv, https://watch.plex.tv, https://www.samsungtvplus.com)
+imports its channels like any M3U list: the
 source is recognised by its host and its channels are written out as M3U,
 each stream stored as `<scheme>://<id>` with the headers playback needs.
 
@@ -15,9 +17,10 @@ from typing import Optional
 from types import ModuleType
 from urllib.parse import urlparse
 
-from app.services.live_providers import atresplayer, base, mediaset, plex, pluto, sietetv, telemadrid
+from app.services.live_providers import (atresplayer, base, mediaset, plex, pluto, samsung,
+                                         sietetv, telemadrid)
 
-PROVIDERS = (atresplayer, mediaset, sietetv, telemadrid, pluto, plex)
+PROVIDERS = (atresplayer, mediaset, sietetv, telemadrid, pluto, plex, samsung)
 LIVE_PATH = '/live/'
 
 

@@ -308,3 +308,15 @@ def test_saved_preference_applies_to_http_sources(db_session):
     ])
     db_session.commit()
     assert TunerService(db_session).relay_stream_ids(tv.id) == [HTTP_ID, ACE_ID]
+
+
+def test_http_relay_probes_enough_to_find_late_audio():
+    """Plex's 1080p variant (5 Mbps) carries no AAC frame in its first
+    megabyte: probing 1 MB / 1 s left the audio without a sample rate and
+    FFmpeg refused to write the MPEG-TS header (exit 234, both Plex channels
+    tried on the bench, 28-10). 3 MB / 2 s found it; FFmpeg stops probing as
+    soon as every stream is known, so other sources start as before."""
+    from app.services.tuner_http_source import http_tuner_argv
+    argv = http_tuner_argv('ffmpeg', 'http://127.0.0.1:1/x.m3u8')
+    assert int(argv[argv.index('-probesize') + 1]) >= 3_000_000
+    assert int(argv[argv.index('-analyzeduration') + 1]) >= 2_000_000

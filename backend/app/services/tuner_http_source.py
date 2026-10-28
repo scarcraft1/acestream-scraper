@@ -24,13 +24,21 @@ from app.services.tuner_remux import ffmpeg_binary
 logger = logging.getLogger(__name__)
 
 
+# Plex's 1080p variant (5 Mbps) carries no AAC frame in its first megabyte:
+# with 1 MB / 1 s the audio had no sample rate and FFmpeg refused to write
+# the MPEG-TS header (exit 234). FFmpeg stops probing once every stream is
+# known, so a source that shows them early starts as soon as before.
+PROBE_BYTES = 3_000_000
+PROBE_MICROSECONDS = 2_000_000
+
+
 def http_tuner_argv(binary: str, url: str, *, plex_compatible_audio: bool = False) -> list[str]:
     return [
         binary, '-nostdin', '-hide_banner', '-loglevel', 'error',
         '-protocol_whitelist', 'http,tcp,crypto',
         '-format_whitelist', 'hls,mpegts,mov,aac,mp3,webvtt', '-http_proxy', '',
-        '-fflags', '+genpts+discardcorrupt', '-probesize', '1000000',
-        '-analyzeduration', '1000000', '-i', url,
+        '-fflags', '+genpts+discardcorrupt', '-probesize', str(PROBE_BYTES),
+        '-analyzeduration', str(PROBE_MICROSECONDS), '-i', url,
         '-map', '0:v:0?', '-map', '0:a?', '-c', 'copy',
         *(['-c:a', 'aac', '-b:a', '160k', '-ac', '2'] if plex_compatible_audio else []),
         '-f', 'mpegts', '-mpegts_flags', '+resend_headers+latm' if plex_compatible_audio else '+resend_headers',

@@ -15,9 +15,9 @@ from typing import Optional
 from types import ModuleType
 from urllib.parse import urlparse
 
-from app.services.live_providers import atresplayer, base, mediaset, pluto, sietetv, telemadrid
+from app.services.live_providers import atresplayer, base, mediaset, plex, pluto, sietetv, telemadrid
 
-PROVIDERS = (atresplayer, mediaset, sietetv, telemadrid, pluto)
+PROVIDERS = (atresplayer, mediaset, sietetv, telemadrid, pluto, plex)
 LIVE_PATH = '/live/'
 
 

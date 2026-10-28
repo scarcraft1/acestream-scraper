@@ -42,3 +42,6 @@ COPY --from=interface /src/dist/ /app/frontend_build/
 # starts them from its own directory, so they sit next to it.
 COPY warp-setup.sh docker/scripts/warp-inbound.sh docker/scripts/warp-socks.py docker/scripts/tcp-forward.py /usr/local/bin/
 RUN chmod 0755 /usr/local/bin/warp-setup.sh /usr/local/bin/warp-inbound.sh /usr/local/bin/warp-socks.py /usr/local/bin/tcp-forward.py
+# The ARM engine's start-up and its dnsproxyd listener (55c9e72): the base
+# image's copies answer one client at a time. On amd64 they are unused.
+COPY docker/scripts/acestream-android/main_linux.py docker/scripts/acestream-android/bionic_dns.py /opt/acestream/

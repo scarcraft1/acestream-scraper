@@ -15,9 +15,9 @@ from typing import Optional
 from types import ModuleType
 from urllib.parse import urlparse
 
-from app.services.live_providers import atresplayer, base, mediaset, pluto, sietetv, telemadrid
+from app.services.live_providers import atresplayer, base, mediaset, plex, pluto, sietetv, telemadrid
 
-PROVIDERS = (atresplayer, mediaset, sietetv, telemadrid, pluto)
+PROVIDERS = (atresplayer, mediaset, sietetv, telemadrid, pluto, plex)
 # One advertised source per installed adapter; no network requests during listing.
 BUILTIN_SOURCES = (
     {'id': 'atresplayer', 'name': 'Atresmedia', 'url': 'https://www.atresplayer.com'},
@@ -25,6 +25,7 @@ BUILTIN_SOURCES = (
     {'id': '7riojaplay', 'name': '7 Rioja', 'url': 'https://www.7riojaplay.tv'},
     {'id': 'telemadrid', 'name': 'Telemadrid', 'url': 'https://www.telemadrid.es'},
     {'id': 'pluto', 'name': 'Pluto TV', 'url': 'https://pluto.tv'},
+    {'id': 'plex', 'name': 'Plex', 'url': 'https://watch.plex.tv'},
 )
 LIVE_PATH = '/live/'
 

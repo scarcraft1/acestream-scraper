@@ -21,8 +21,12 @@ def _guide(db, channels):
 
 
 def _import(db, playlist):
-    M3UService().extract_channels_from_content(
-        playlist, db=db, epg_service=EPGService(db), tv_channel_service=TVChannelService(db))
+    # As the scraper does since develop fbb5c1a: parse, then create TV channels
+    # in a separate step (after import exclusions), staged in the caller's commit.
+    service = M3UService()
+    parsed = service.extract_channels_from_content(playlist)
+    service.auto_create_tv_channels_from_epg(db, parsed, EPGService(db), TVChannelService(db))
+    db.commit()
     return {tv.epg_id: tv.name for tv in db.query(TVChannel).all()}
 
 

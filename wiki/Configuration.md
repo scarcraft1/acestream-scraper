@@ -15,7 +15,23 @@ This guide provides detailed information about configuring Acestream Ids Scraper
 
 ## Application Settings
 
-Scraper stores application settings in the database. Container environment variables set runtime defaults; saved engine and public-address settings take precedence. Source URLs belong in **Scraper**, XMLTV feeds in **EPG → Sources**. Scraper has no setup wizard and does not read `config/config.json`.
+Scraper stores catalogue and application preferences in the database. The development version adds a web setup wizard and `runtime-config.json` beside that database. Saved engine, checker and public-address settings still take precedence. Source URLs belong in **Scraper**, XMLTV feeds in **EPG → Sources**.
+
+## First-run setup
+
+Open **Set up scraper** on a fresh installation, or **Settings → Setup wizard** (`/setup`). Choose playback, network access and optional services, review the changes, then save. You can explore the app without completing the wizard. After saving, follow the links for sources, guides, TV channels, schedules and integrations. No sources or streams are preloaded. Official broadcaster adapters such as Atresplayer are used only when you add their source.
+
+The default file is `config/runtime-config.json`, next to `config/scraper.db`; a custom `DATABASE_URL` places it in that database's directory. It is separate from the legacy v1 `config.json`. The directory must be writable and mounted persistently. Back up both the database and runtime file; treat the file as private even though credential variables are excluded.
+
+- On the first start only, supported environment values initialize the versioned JSON file. Native startup also reads compatible application values from `.env`.
+- Once the file exists, its migrated options win over those environment variables. Change them in the wizard or edit the file while stopped. Removing a key restores its default, not a newly supplied environment value.
+- Save reports when a restart is required. Restart the container/application to apply runtime changes; playback is interrupted. Setup does not restart it for you. Docker health checks keep using the running settings until restart.
+- Existing database preferences are retained. A saved playback URL, checker selection or public address takes precedence over the corresponding runtime default; edit those in their existing Settings/Integrations pages.
+- Existing installations are not forced through onboarding. Setup remains available in Settings.
+- Invalid JSON, unknown options or unsupported versions stop configuration loading without replacing the file. Restore a known-good copy or correct it while stopped. Do not delete the file merely to apply one environment change: deletion reimports all bootstrap values and loses file-only choices.
+
+Docker still owns image choice, ports, mounts, capabilities, executable overrides and secrets (`API_TOKEN`, Telegram credentials/key location, WARP license). Setup cannot install missing services or grant Docker permissions. Keep API protection and public exposure in your deployment configuration. See the [complete option audit](../docs/dev/runtime-configuration-audit.md) for the exact migrated and retained options.
+
 
 | Where | What to configure |
 |---|---|
@@ -42,6 +58,8 @@ The Settings tabs use `/settings?tab=playback|automation|links|access`.
 See the [illustrated walkthrough](Usage.md) and [playback routing guide](Remote-Players.md#playback-routing) for examples.
 
 ## Environment Variables
+
+For migrated options listed in the [runtime audit](../docs/dev/runtime-configuration-audit.md), the following environment values are **first-start seeds only**. Deployment-only options remain environment-controlled. The wizard/file is available on develop; check release notes before expecting it in a published stable image.
 
 ### Database and backend settings
 
@@ -351,3 +369,13 @@ Update these names in your Compose file, container settings or `.env` file when 
 - `ACESTREAM_ENGINE_URL` -> `ACE_ENGINE_URL`
 
 `ENABLE_LEGACY_ENV_ALIASES` is no longer required and does not disable compatibility. See the [v2.1 upgrade notes](../docs/release/v2.1-release-notes.md).
+
+### Import policy and automatic saved searches
+
+Global exclusions live in Scraper → Import exclusions. Saved catalogue queries
+live in Scraper → Saved searches. Both are database settings, with no new environment
+variables or ports. Saving a query is configuration only; automatic imports are
+opt-in on the existing source refresh schedule (Settings → Automation). Editing its
+query/category pauses refresh until explicitly enabled again. Run now uses the
+shared maintenance queue and may run a paused query once. Exclusions skip future
+imports across sources and never delete existing channels. See [Usage](Usage.md#import-exclusions-and-saved-searches).

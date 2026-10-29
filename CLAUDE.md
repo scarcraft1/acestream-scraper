@@ -465,6 +465,12 @@ the lock file, and let the surviving engine take over after owner exit. Never
 start competing upstream listeners that can unlink each other's socket. See
 `docs/ops/arm64-mod-detected.md` for live-test scope and remaining network limits.
 
+OCI installs build a DNS-only `libnetd_client.so` against the matching bionic
+libc so native lookups reach that socket. Preserve the bounded native protocol
+listener, requested ports/families/socket types and local hosts aliases; never
+link glibc or install Android fwmark routing hooks. Validate with actual bionic
+libc calls, not only Python's overridden resolver. ARMv7 remains experimental.
+
 WARP auto-connect (`WARP_ENABLE_NAT=true`) must wait for JSON status Connected,
 not merely a successful CLI call, before engines start. The ARM resolver follows
 container nameserver changes and retains the last valid configuration during a
@@ -629,7 +635,10 @@ association is explicit. Require source timezones, reject ambiguous/nonexistent
 local times without an offset, and never infer live state or media signal from
 clock/import. Event-only HTTP media uses the shared guarded player without TV
 assignments or playlist export. Following is installation-wide; archive is
-reversible until opt-in retention deletes eligible rows. W3U entries have an explicit reviewed event bridge; Telegram transport remains separate; no guide overlay is offered here.
+reversible until opt-in retention deletes eligible rows. W3U entries have an explicit reviewed event bridge; Telegram transport remains separate. Read-only EPG programme associations use both
+participant names and bounded schedule times, preserve source/manual metadata, and
+link TV channels only through unambiguous source-qualified guide assignments.
+Source deletion removes refresh configuration while retaining imported events.
 See `docs/dev/sporting-events.md` and `wiki/Sports-Events.md`.
 
 
@@ -731,3 +740,48 @@ Integrations is a sidebar category with independent pages at
 Keep tuner settings with Media servers, WARP under System, and contextual links
 pointing directly to the relevant setup. Each page mounts only its own section;
 shared query keys and page-scoped feedback preserve existing operations.
+
+
+## First-run runtime configuration
+
+`runtime-config.json` version 1 lives beside the SQLite database. Only reviewed
+`backend/app/config/runtime-options.json` data options migrate from environment on
+first creation; existing files win thereafter. Keep commands, paths, ports, image
+facts and credentials in deployment configuration. `/setup` offers an optional web
+wizard; writes are authenticated, validated, revision-checked and atomic. Changes
+require restart; Docker health checks read the applied boot snapshot. Preserve
+existing database preferences and legacy v1 `config.json`. Fresh databases contain
+no source URLs/streams. Live E2E tests require an explicit authorized scenario;
+never restore a default third-party catalogue. See
+`docs/dev/runtime-configuration-audit.md` and `wiki/Configuration.md#first-run-setup`.
+
+## Import exclusions and saved searches
+
+Scraper tabs are `?tab=sources|searches|exclusions`; old links default to Sources.
+Exclusions gate permanent channel imports before assignment/upsert, not playback or
+existing-channel editing. Keep raw scrape IDs separate from admitted IDs and protect
+excluded existing rows from pruning. Rule mutations and final import apply share
+the policy singleton DB write claim; previews never mutate inventory. Manual Add's
+explicit `allow_excluded` override must never propagate to automatic imports.
+
+Search imports resolve infohashes server-side and preserve existing metadata.
+Saved searches default paused, save configuration only, import additively and retain
+separate memberships. Query/category edits pause refresh. Target reservations use
+the shared maintenance FIFO at enqueue time, including scheduled `url_scraping`
+snapshots; never acquire the FIFO again inside that job. Workers own sessions and
+recheck definition/policy/run ownership before apply. Restart interrupts orphaned
+runs. Keep bounds, preview tokens, truthful partial outcomes and starvation-safe
+oldest-attempt ordering. See `docs/dev/import-exclusions-and-saved-searches.md`.
+
+
+## Built-in recordings
+
+Recordings are opt-in with an explicit persistent `RECORDINGS_DIR`. Keep DVR
+capture on its dedicated coordinator, outside the maintenance FIFO; prioritize
+scheduled capture over local MP4/AAC preparation. Preserve direct-engine source
+leases, guarded HTTP input, control-pipe/process-group cleanup, journal recovery,
+stop intent and immutable guide snapshots. Never replace originals during
+conversion or delete protected/active/reader-held media. File routes retain the
+optional API-token policy and descriptor-relative no-follow access. Recordings
+is under Watch; scheduling is TV-channel-only. See `wiki/Recordings.md` and
+`docs/ops/recordings.md` for limits, qualification and rollback.

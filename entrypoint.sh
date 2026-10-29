@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Load the persisted data options before selecting or launching any service.
+RUNTIME_CONFIG_SCRIPT="$(dirname "$0")/backend/runtime_config.py"
+if [ ! -f "$RUNTIME_CONFIG_SCRIPT" ]; then RUNTIME_CONFIG_SCRIPT=/app/runtime_config.py; fi
+if [ "${SCRAPER_RUNTIME_LOADED:-}" != 1 ] && [ -f "$RUNTIME_CONFIG_SCRIPT" ]; then
+    exec python3 "$RUNTIME_CONFIG_SCRIPT" run bash "$0" "$@"
+fi
+
 LOG_DIR=${LOG_DIR:-/app/logs}
 mkdir -p "$LOG_DIR"
 export LOG_DIR
@@ -435,6 +442,7 @@ export IPFS_GATEWAY_URL="${IPFS_GATEWAY_URL:-http://127.0.0.1:$IPFS_GATEWAY_PORT
 # MEDIA_SERVER_MIN_REFRESH_MINUTES debounces Jellyfin/Plex guide refreshes.
 export PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}"
 export TUNER_ALLOWED_NETWORKS="${TUNER_ALLOWED_NETWORKS:-127.0.0.0/8,10.0.0.0/8,100.64.0.0/10,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10}"
+export RECORDINGS_DIR="${RECORDINGS_DIR:-}"
 export PLAYER_HLS_DIR="${PLAYER_HLS_DIR:-/tmp/acestream-player}"
 export PLAYER_MAX_SESSIONS="${PLAYER_MAX_SESSIONS:-3}"
 export PLAYER_START_TIMEOUT_SECONDS="${PLAYER_START_TIMEOUT_SECONDS:-45}"

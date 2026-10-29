@@ -39,20 +39,23 @@ def log(msg):
 def configure_bionic_dns():
     """Route Python/socket lookups through Docker's resolv.conf.
 
-    The jopsis 3.2.17 distribution includes dnsproxyd for this purpose because
+    The OCI installer supplies the native netd transport and listener because
     Android bionic does not use glibc's resolver configuration directly.
     Older official APK payloads do not include the helper and simply retain
-    their existing behavior. Where it exists, bionic_dns answers its socket
-    instead of the helper's own listener.
+    their existing behavior.
     """
     try:
         import dns.resolver
-        import dnsproxyd  # noqa: F401 -- only payloads that ship it expect the socket
-        from bionic_dns import container_resolver, dnsproxy_listener, start_shared_dns
+        from bionic_dns import container_resolver, start_shared_dns
 
+        oci = os.path.isfile(os.path.join(os.path.dirname(__file__), "main.py.oci-orig"))
+        if oci:
+            from bionic_dns_proxy import dnsproxyd_listener
+        else:
+            from dnsproxyd import dnsproxyd_listener
         resolver = container_resolver(dns.resolver.Resolver, log)
         dns.resolver.override_system_resolver(resolver)
-        start_shared_dns(dnsproxy_listener(log), resolver)
+        start_shared_dns(dnsproxyd_listener, resolver, wait_ready=oci)
         log("bionic DNS resolver configured")
     except Exception as exc:
         log("bionic DNS resolver unavailable: {}".format(exc))

@@ -1,6 +1,7 @@
 """
 Main application entry point for Acestream Scraper v2 backend.
 """
+from pathlib import Path
 import asyncio
 import logging
 import os
@@ -71,6 +72,12 @@ def initialize_database():
     """
     from migrate_database import DatabaseMigrator
 
+    from runtime_config import config_path, ensure_config
+    runtime_settings = get_settings()
+    runtime_path = config_path(runtime_settings.DATABASE_URL)
+    # Include resolved .env/legacy names without serializing private credentials.
+    bootstrap = {**os.environ, **runtime_settings.model_dump()}
+    ensure_config(runtime_path, bootstrap, existing_database=Path(runtime_settings.DATABASE_URL[len('sqlite:///'):]).exists())
     migrator = DatabaseMigrator()
 
     # Only run migration if acestream.db exists and hasn't been migrated yet.
@@ -177,6 +184,7 @@ async def lifespan(app: FastAPI):
     services_started = False
 
     from app.services.telegram.manager import manager as telegram_manager
+    from app.services.recording_coordinator import recording_coordinator
 
     async def stop_services():
         nonlocal reaper, services_started
@@ -185,6 +193,7 @@ async def lifespan(app: FastAPI):
             with suppress(asyncio.CancelledError):
                 await reaper
             reaper = None
+        await recording_coordinator.stop()
         await telegram_manager.stop()
         await tuner_probe_service.stop()
         if services_started:
@@ -218,6 +227,9 @@ async def lifespan(app: FastAPI):
             await asyncio.to_thread(task_service.restore_states)
             from app.services.schedule_config_service import load_schedule_anchors
             task_service.configure_schedule(await asyncio.to_thread(load_schedule_anchors))
+            from app.services.saved_search_service import scheduled_targets, prepare_target, finish_target
+            task_service.register_maintenance_targets('url_scraping', snapshot=scheduled_targets,
+                prepare=prepare_target, finish=finish_target, argument='saved_search_targets')
             task_service.start()
             task_service.add_interval_task(run_activity_log_cleanup, seconds=86400, job_id="activity_log_cleanup")  # daily
             scrape_hours, epg_hours, status_minutes = await asyncio.to_thread(_configured_intervals)
@@ -235,6 +247,7 @@ async def lifespan(app: FastAPI):
             # channel_status opens the engine, so not at startup: a quarter of
             # an hour later, and only if it is still overdue then.
             task_service.catch_up_later("channel_status", delay_seconds=900)
+            await recording_coordinator.start()
             await player_service.start()
             await telegram_manager.start()
             await asyncio.to_thread(_schedule_deferred_migration)
@@ -281,7 +294,7 @@ async def startup_readiness(request: Request, call_next):
     path = request.url.path
     if startup_service.active and startup_service.status != 'ready':
         spa_paths = {'/', '/startup', '/live-tv', '/tv-channels', '/acestream-channels',
-                     '/scraper', '/epg', '/playlist', '/warp', '/search', '/integrations', '/settings'}
+                     '/recordings', '/scraper', '/epg', '/playlist', '/warp', '/search', '/integrations', '/settings'}
         allowed = path in spa_paths or path.startswith(('/assets/', '/static/', '/api/v1/startup'))
         allowed = allowed or path.startswith(('/tv-channels/', '/epg/channels/'))
         allowed = allowed or path in {'/favicon.ico', '/manifest.json', '/robots.txt'}

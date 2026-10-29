@@ -80,7 +80,11 @@ class TVChannelService:
         return self.repository.update_tv_channel(tv_channel_id=tv_channel_id, updates=updates)
 
     def delete_tv_channel(self, tv_channel_id: int) -> bool:
-        return self.repository.delete_tv_channel(tv_channel_id)
+        deleted = self.repository.delete_tv_channel(tv_channel_id)
+        if deleted:
+            from app.services.recording_coordinator import recording_coordinator
+            recording_coordinator.request_refresh()
+        return deleted
 
     def associate_acestream(self, tv_channel_id: int, acestream_id: str) -> bool:
         return self.repository.associate_acestream_to_tv_channel(tv_channel_id=tv_channel_id, acestream_channel_id=acestream_id)
@@ -149,7 +153,7 @@ class TVChannelService:
 
     @serialized_matching
     def create_tv_channels_from_epg_analysis(self, strictness: str, epg_channel_ids: List[int],
-                                            source_id=None, expected_previews=None, automatic=False) -> Dict[str, Any]:
+                                            source_id=None, expected_previews=None, automatic=False, import_excluded_ids=None) -> Dict[str, Any]:
         selected_ids = sorted(set(epg_channel_ids))
         analysis = EPGMatchService(self.repository.db).analyze_matches(
             strictness=strictness,
@@ -163,7 +167,12 @@ class TVChannelService:
         ):
             raise StaleEPGPreview('Matches changed. Analyze again before applying.')
         if automatic:
-            selected_rows = [row for row in selected_rows if row['automation_safe']]
+            from app.services.import_exclusion_service import ImportExclusionService
+            policy = ImportExclusionService(self.repository.db).snapshot(claim=True)
+            blocked = {channel.id for channel in self.repository.db.query(AcestreamChannel).all()
+                       if policy.matches(channel.id, channel.name)} | set(import_excluded_ids or ())
+            selected_rows = [row for row in selected_rows if row['automation_safe'] and
+                not any(c['acestream_channel_id'] in blocked for c in row['candidates'])]
 
         if not selected_rows:
             raise ValueError("No accepted matches found for selected EPG rows.")

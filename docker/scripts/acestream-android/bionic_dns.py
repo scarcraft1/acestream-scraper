@@ -9,7 +9,6 @@ import fcntl
 import ipaddress
 import os
 import socket
-import struct
 import threading
 import time
 
@@ -62,115 +61,6 @@ def container_resolver(resolver_type, log, path="/etc/resolv.conf"):
     return ReloadingResolver()
 
 
-# Bionic getaddrinfo error codes (bionic/libc/include/netdb.h).
-EAI_AGAIN = 2
-EAI_NODATA = 7
-EAI_NONAME = 8
-
-
-def _error_code(exc):
-    """A missing name is final; anything else (timeouts, no reachable server,
-    a malformed query) is temporary, so the engine retries instead of
-    deciding it is offline. dnspython is matched by class name: this module
-    must import without it."""
-    name = type(exc).__name__
-    if name == "NXDOMAIN":
-        return EAI_NONAME
-    if name == "NoAnswer":
-        return EAI_NODATA
-    return EAI_AGAIN
-
-
-def _query_host(query):
-    """The host after the getaddrinfo command, wherever the command starts.
-
-    The payload's listener took the second word, which is wrong when the
-    client prefixes a sequence number."""
-    words = query.split(b"\0", 1)[0].split()
-    for index, word in enumerate(words[:-1]):
-        if word == b"getaddrinfo":
-            return words[index + 1].decode("utf-8", "replace")
-    raise ValueError("not a getaddrinfo query")
-
-
-def _addrinfo_response(ip):
-    # Same single IPv4 addrinfo as the payload's listener.
-    return struct.pack("!4s I I I I I I I 4s I I I I", b"222", 1, 0, 2, 1, 6,
-                       16, 0x02000050, socket.inet_aton(ip), 0, 0, 0, 0)
-
-
-def _error_response(code):
-    # The payload's listener sent the code as a little-endian int.
-    return struct.pack("!4s I I", b"401", 4, code << 24)
-
-
-class _FailureLog:
-    """Logs failing queries, at most `limit` per minute, plus a count of the rest."""
-
-    def __init__(self, log, limit=20):
-        self._log, self._limit = log, limit
-        self._lock = threading.Lock()
-        self._minute, self._logged, self._dropped = None, 0, 0
-
-    def __call__(self, query, exc, code):
-        minute = int(time.monotonic() // 60)
-        with self._lock:
-            if minute != self._minute:
-                if self._dropped:
-                    self._log("bionic DNS: {} more failed queries not logged".format(self._dropped))
-                self._minute, self._logged, self._dropped = minute, 0, 0
-            if self._logged >= self._limit:
-                self._dropped += 1
-                return
-            self._logged += 1
-        self._log("bionic DNS query failed: {!r} -> {} (EAI {})".format(
-            query[:160], type(exc).__name__, code))
-
-
-def dnsproxy_listener(log, socket_path="/dev/socket/dnsproxyd", backlog=64):
-    """A listener for run_shared_listener that answers clients concurrently.
-
-    The payload's listener served one client at a time with a backlog of one,
-    so simultaneous lookups were refused, and it answered every failure,
-    including timeouts, with EAI_NODATA. Its reply was also sent outside its
-    error handling: a client that went away took the listener down."""
-    failed = _FailureLog(log)
-
-    def answer(client, resolver):
-        with client:
-            query = b""
-            try:
-                client.settimeout(30)
-                query = client.recv(1024)
-                address = resolver.resolve(_query_host(query))[0].address
-                response = _addrinfo_response(address)
-            except Exception as exc:
-                code = _error_code(exc)
-                failed(query, exc, code)
-                response = _error_response(code)
-            try:
-                client.sendall(response)
-            except OSError:
-                pass
-
-    def listener(resolver):
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-                server.bind(socket_path)
-                server.listen(backlog)
-                while True:
-                    client, _ = server.accept()
-                    threading.Thread(target=answer, args=(client, resolver),
-                                     name="dnsproxyd-client", daemon=True).start()
-        finally:
-            try:
-                os.unlink(socket_path)
-            except FileNotFoundError:
-                pass
-
-    return listener
-
-
 def run_shared_listener(listener, resolver, socket_path="/dev/socket/dnsproxyd"):
     os.makedirs(os.path.dirname(socket_path), exist_ok=True)
     while True:
@@ -188,10 +78,23 @@ def run_shared_listener(listener, resolver, socket_path="/dev/socket/dnsproxyd")
         time.sleep(1)
 
 
-def start_shared_dns(listener, resolver):
+def start_shared_dns(listener, resolver, wait_ready=True):
     thread = threading.Thread(
         target=run_shared_listener, args=(listener, resolver),
         name="shared-dnsproxyd", daemon=True,
     )
     thread.start()
-    return thread
+    if not wait_ready:
+        return thread
+    # Do not enter the engine before either our listener or the other engine's
+    # listener is accepting native requests. Connecting without a query is safe.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(0.1)
+                client.connect("/dev/socket/dnsproxyd")
+            return thread
+        except OSError:
+            time.sleep(0.02)
+    raise RuntimeError("bionic DNS listener did not become ready")

@@ -396,6 +396,12 @@ export interface paths {
      */
     put: operations["update_public_base_url_api_v1_config_public_base_url_put"];
   };
+  "/api/v1/config/recordings": {
+    /** Settings */
+    get: operations["settings_api_v1_config_recordings_get"];
+    /** Configure */
+    put: operations["configure_api_v1_config_recordings_put"];
+  };
   "/api/v1/config/rescrape_interval": {
     /**
      * Get Rescrape Interval
@@ -619,6 +625,8 @@ export interface paths {
     post: operations["queue_event_refresh_api_v1_events_sources_refresh_post"];
   };
   "/api/v1/events/sources/{source_id}": {
+    /** Delete Event Source */
+    delete: operations["delete_event_source_api_v1_events_sources__source_id__delete"];
     /** Update Event Source */
     patch: operations["update_event_source_api_v1_events_sources__source_id__patch"];
   };
@@ -642,6 +650,22 @@ export interface paths {
      * @description Check the overall system health
      */
     get: operations["check_health_api_v1_health_get"];
+  };
+  "/api/v1/import-exclusions": {
+    /** List Rules */
+    get: operations["list_rules_api_v1_import_exclusions_get"];
+    /** Create Rule */
+    post: operations["create_rule_api_v1_import_exclusions_post"];
+  };
+  "/api/v1/import-exclusions/preview": {
+    /** Preview */
+    post: operations["preview_api_v1_import_exclusions_preview_post"];
+  };
+  "/api/v1/import-exclusions/{rule_id}": {
+    /** Delete Rule */
+    delete: operations["delete_rule_api_v1_import_exclusions__rule_id__delete"];
+    /** Update Rule */
+    patch: operations["update_rule_api_v1_import_exclusions__rule_id__patch"];
   };
   "/api/v1/media-servers": {
     /** Saved media servers */
@@ -784,6 +808,60 @@ export interface paths {
      */
     get: operations["get_tv_channels_playlist_api_v1_playlists_tv_channels_m3u_get"];
   };
+  "/api/v1/recordings": {
+    /** Listing */
+    get: operations["listing_api_v1_recordings_get"];
+    /** Create */
+    post: operations["create_api_v1_recordings_post"];
+  };
+  "/api/v1/recordings/capabilities": {
+    /** Capabilities */
+    get: operations["capabilities_api_v1_recordings_capabilities_get"];
+  };
+  "/api/v1/recordings/current-programme": {
+    /** Current Programme */
+    get: operations["current_programme_api_v1_recordings_current_programme_get"];
+  };
+  "/api/v1/recordings/upcoming": {
+    /** Upcoming */
+    get: operations["upcoming_api_v1_recordings_upcoming_get"];
+  };
+  "/api/v1/recordings/{rid}": {
+    /** Detail */
+    get: operations["detail_api_v1_recordings__rid__get"];
+    /** Delete */
+    delete: operations["delete_api_v1_recordings__rid__delete"];
+    /** Edit */
+    patch: operations["edit_api_v1_recordings__rid__patch"];
+  };
+  "/api/v1/recordings/{rid}/cancel": {
+    /** Cancel */
+    post: operations["cancel_api_v1_recordings__rid__cancel_post"];
+  };
+  "/api/v1/recordings/{rid}/conversions": {
+    /** Convert */
+    post: operations["convert_api_v1_recordings__rid__conversions_post"];
+  };
+  "/api/v1/recordings/{rid}/files/{fid}": {
+    /** File */
+    get: operations["file_api_v1_recordings__rid__files__fid__get"];
+    /** File */
+    head: operations["file_api_v1_recordings__rid__files__fid__head"];
+  };
+  "/api/v1/recordings/{rid}/playback-sessions": {
+    /** Open Playback */
+    post: operations["open_playback_api_v1_recordings__rid__playback_sessions_post"];
+  };
+  "/api/v1/recordings/{rid}/playback-sessions/{sid}": {
+    /** Playback Status */
+    get: operations["playback_status_api_v1_recordings__rid__playback_sessions__sid__get"];
+    /** Close Playback */
+    delete: operations["close_playback_api_v1_recordings__rid__playback_sessions__sid__delete"];
+  };
+  "/api/v1/recordings/{rid}/stop": {
+    /** Stop */
+    post: operations["stop_api_v1_recordings__rid__stop_post"];
+  };
   "/api/v1/remote-players": {
     /** Saved remote players */
     get: operations["list_players_api_v1_remote_players_get"];
@@ -831,6 +909,28 @@ export interface paths {
   "/api/v1/remote-players/{player_id}/test": {
     /** Probe a saved player */
     post: operations["test_saved_player_api_v1_remote_players__player_id__test_post"];
+  };
+  "/api/v1/saved-searches": {
+    /** List Searches */
+    get: operations["list_searches_api_v1_saved_searches_get"];
+    /** Create Search */
+    post: operations["create_search_api_v1_saved_searches_post"];
+  };
+  "/api/v1/saved-searches/preview": {
+    /** Preview */
+    post: operations["preview_api_v1_saved_searches_preview_post"];
+  };
+  "/api/v1/saved-searches/{search_id}": {
+    /** Get Search */
+    get: operations["get_search_api_v1_saved_searches__search_id__get"];
+    /** Delete Search */
+    delete: operations["delete_search_api_v1_saved_searches__search_id__delete"];
+    /** Update Search */
+    patch: operations["update_search_api_v1_saved_searches__search_id__patch"];
+  };
+  "/api/v1/saved-searches/{search_id}/run": {
+    /** Run Search */
+    post: operations["run_search_api_v1_saved_searches__search_id__run_post"];
   };
   "/api/v1/scrapers/recipes/preview": {
     /**
@@ -922,6 +1022,10 @@ export interface paths {
      */
     post: operations["add_multiple_channels_api_v1_search_add_multiple_post"];
   };
+  "/api/v1/search/import": {
+    /** Import Search Results */
+    post: operations["import_search_results_api_v1_search_import_post"];
+  };
   "/api/v1/search/{infohash}/check_status": {
     /**
      * Check Search Broadcast
@@ -935,6 +1039,12 @@ export interface paths {
      * @description Resolve a catalogue result before saving it or opening the shared player.
      */
     post: operations["resolve_search_result_api_v1_search__infohash__resolve_post"];
+  };
+  "/api/v1/setup": {
+    /** Get Setup */
+    get: operations["get_setup_api_v1_setup_get"];
+    /** Save Setup */
+    put: operations["save_setup_api_v1_setup_put"];
   };
   "/api/v1/startup": {
     /** Status */
@@ -1320,6 +1430,11 @@ export interface components {
      * @description Schema for Acestream channel creation
      */
     AcestreamChannelCreate: {
+      /**
+       * Allow Excluded
+       * @default false
+       */
+      allow_excluded?: boolean;
       /** Group */
       group?: string | null;
       /**
@@ -1530,9 +1645,9 @@ export interface components {
       description?: string | null;
       /**
        * Id
-       * @description Acestream channel ID (optional, will be generated if not provided)
+       * @description Catalogue infohash; resolved by the server before import
        */
-      id?: string | null;
+      id: string;
       /**
        * Logo
        * @description Channel logo URL
@@ -1558,7 +1673,7 @@ export interface components {
     AddMultipleRequest: {
       /**
        * Channels
-       * @description List of channels to add
+       * @description Catalogue results to resolve and import
        */
       channels: components["schemas"]["AddChannelRequest"][];
     };
@@ -1786,6 +1901,11 @@ export interface components {
        */
       duplicates?: number;
       /**
+       * Excluded
+       * @default 0
+       */
+      excluded?: number;
+      /**
        * Failed Fetches
        * @default 0
        */
@@ -1826,6 +1946,8 @@ export interface components {
        * @default false
        */
       duplicate?: boolean;
+      /** Excluded Rule Ids */
+      excluded_rule_ids?: number[];
       /** Guide Id */
       guide_id?: string | null;
       /** Header Names */
@@ -1989,6 +2111,11 @@ export interface components {
        * @default false
        */
       partial?: boolean;
+      /**
+       * Policy Revision
+       * @default 0
+       */
+      policy_revision?: number;
       /** Preview Token */
       preview_token?: string | null;
       /**
@@ -2726,6 +2853,25 @@ export interface components {
       /** Warnings */
       warnings: string[];
     };
+    /** EventProgramMatch */
+    EventProgramMatch: {
+      /**
+       * Ends At
+       * Format: date-time
+       */
+      ends_at: string;
+      epg_channel: components["schemas"]["EventChannelTarget"];
+      /** Program Id */
+      program_id: number;
+      /**
+       * Starts At
+       * Format: date-time
+       */
+      starts_at: string;
+      /** Title */
+      title: string;
+      tv_channel?: components["schemas"]["EventChannelTarget"] | null;
+    };
     /** EventProviderCatalog */
     EventProviderCatalog: {
       /** Feeds */
@@ -2895,6 +3041,8 @@ export interface components {
       corrected: boolean;
       /** Ends At */
       ends_at?: string | null;
+      /** Epg Matches */
+      epg_matches?: components["schemas"]["EventProgramMatch"][];
       /** Followed */
       followed: boolean;
       /**
@@ -2934,6 +3082,120 @@ export interface components {
       timezone: string;
       /** Title */
       title: string;
+    };
+    /** ExclusionInput */
+    ExclusionInput: {
+      /**
+       * Enabled
+       * @default true
+       */
+      enabled?: boolean;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: "name_contains" | "name_equals" | "stream_id_equals";
+      /** Note */
+      note?: string | null;
+      /** Value */
+      value: string;
+    };
+    /** ExclusionList */
+    ExclusionList: {
+      /** Items */
+      items: components["schemas"]["ExclusionRule"][];
+      /** Policy Revision */
+      policy_revision: number;
+      /** Total */
+      total: number;
+    };
+    /** ExclusionPreview */
+    ExclusionPreview: {
+      /** Complete */
+      complete: boolean;
+      /** Examples */
+      examples: components["schemas"]["ImportCandidate"][];
+      /** Matched */
+      matched: number;
+      /** Policy Revision */
+      policy_revision: number;
+      /** Scanned */
+      scanned: number;
+    };
+    /** ExclusionPreviewRequest */
+    ExclusionPreviewRequest: {
+      /** Candidates */
+      candidates?: components["schemas"]["ImportCandidate"][] | null;
+      /**
+       * Enabled
+       * @default true
+       */
+      enabled?: boolean;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: "name_contains" | "name_equals" | "stream_id_equals";
+      /** Note */
+      note?: string | null;
+      /** Value */
+      value: string;
+    };
+    /** ExclusionRule */
+    ExclusionRule: {
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Enabled
+       * @default true
+       */
+      enabled?: boolean;
+      /** Id */
+      id: number;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: "name_contains" | "name_equals" | "stream_id_equals";
+      /** Note */
+      note?: string | null;
+      /** Revision */
+      revision: number;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      /** Value */
+      value: string;
+    };
+    /** ExclusionUpdate */
+    ExclusionUpdate: {
+      /**
+       * Enabled
+       * @default true
+       */
+      enabled?: boolean;
+      /** Expected Revision */
+      expected_revision: number;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: "name_contains" | "name_equals" | "stream_id_equals";
+      /** Note */
+      note?: string | null;
+      /** Value */
+      value: string;
+    };
+    /** ExclusionWrite */
+    ExclusionWrite: {
+      /** Policy Revision */
+      policy_revision: number;
+      rule: components["schemas"]["ExclusionRule"];
     };
     /** ExtractedChannel */
     ExtractedChannel: {
@@ -3059,6 +3321,13 @@ export interface components {
       error: number;
       /** Total */
       total: number;
+    };
+    /** ImportCandidate */
+    ImportCandidate: {
+      /** Channel Id */
+      channel_id: string;
+      /** Name */
+      name: string;
     };
     /** MediaServerCreate */
     MediaServerCreate: {
@@ -3393,6 +3662,31 @@ export interface components {
       /** Streams */
       streams: number;
     };
+    /** ProgrammeSelection */
+    ProgrammeSelection: {
+      /** Category */
+      category?: string | null;
+      /** Description */
+      description?: string | null;
+      /**
+       * End Time
+       * Format: date-time
+       */
+      end_time: string;
+      /** Epg Channel Id */
+      epg_channel_id: number;
+      /** Id */
+      id: number;
+      /**
+       * Start Time
+       * Format: date-time
+       */
+      start_time: string;
+      /** Subtitle */
+      subtitle?: string | null;
+      /** Title */
+      title: string;
+    };
     /** ProvenanceView */
     ProvenanceView: {
       /** External Id */
@@ -3506,6 +3800,252 @@ export interface components {
     RecipeSample: {
       /** Sample */
       sample: string;
+    };
+    /** RecordingAttemptView */
+    RecordingAttemptView: {
+      /** Ended At */
+      ended_at: string | null;
+      /** Exit Code */
+      exit_code: number | null;
+      /** Id */
+      id: string;
+      /** Ordinal */
+      ordinal: number;
+      /** Reason */
+      reason: string | null;
+      /** Route */
+      route: string;
+      /** Source Id */
+      source_id: string;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+    };
+    /** RecordingCapabilities */
+    RecordingCapabilities: {
+      /** Aac Conversion */
+      aac_conversion: boolean;
+      /** Available */
+      available: boolean;
+      /** Enabled */
+      enabled: boolean;
+      /** Message */
+      message: string;
+      /** Mp4 Remux */
+      mp4_remux: boolean;
+      settings: components["schemas"]["RecordingSettings"];
+      /** Storage Ready */
+      storage_ready: boolean;
+      /** Stream Copy */
+      stream_copy: boolean;
+    };
+    /** RecordingConversion */
+    RecordingConversion: {
+      /** File Id */
+      file_id: string;
+      /**
+       * Profile
+       * @default remux
+       * @enum {string}
+       */
+      profile?: "remux" | "aac";
+    };
+    /** RecordingCreate */
+    RecordingCreate: {
+      /**
+       * End Time
+       * Format: date-time
+       */
+      end_time: string;
+      /** Idempotency Key */
+      idempotency_key: string;
+      /**
+       * Mode
+       * @default schedule
+       * @enum {string}
+       */
+      mode?: "now" | "schedule";
+      programme?: components["schemas"]["ProgrammeSelection"] | null;
+      /**
+       * Start Time
+       * Format: date-time
+       */
+      start_time: string;
+      /** Timezone */
+      timezone: string;
+      /** Tv Channel Id */
+      tv_channel_id: number;
+    };
+    /** RecordingEdit */
+    RecordingEdit: {
+      /** End Time */
+      end_time?: string | null;
+      /** Expected Revision */
+      expected_revision: number;
+      /** Protected */
+      protected?: boolean | null;
+      /** Start Time */
+      start_time?: string | null;
+    };
+    /** RecordingFile */
+    RecordingFile: {
+      /** Bytes */
+      bytes: number;
+      /** Codecs */
+      codecs: string[];
+      /** Duration */
+      duration: number | null;
+      /** Id */
+      id: string;
+      /** Kind */
+      kind: string;
+      /** Profile */
+      profile: string | null;
+      /** Reason */
+      reason: string | null;
+      /** Source Artifact Id */
+      source_artifact_id: string | null;
+      /** State */
+      state: string;
+    };
+    /** RecordingGap */
+    RecordingGap: {
+      /**
+       * End
+       * Format: date-time
+       */
+      end: string;
+      /** Reason */
+      reason: string;
+      /**
+       * Start
+       * Format: date-time
+       */
+      start: string;
+    };
+    /** RecordingList */
+    RecordingList: {
+      /** Items */
+      items: components["schemas"]["RecordingView"][];
+      /** Total */
+      total: number;
+    };
+    /** RecordingPlaybackRequest */
+    RecordingPlaybackRequest: {
+      /** File Id */
+      file_id: string;
+    };
+    /** RecordingPlaybackView */
+    RecordingPlaybackView: {
+      /** File Id */
+      file_id: string;
+      /** Id */
+      id: string;
+      /** Media Url */
+      media_url?: string | null;
+      /** Message */
+      message: string;
+      /**
+       * State
+       * @enum {string}
+       */
+      state: "preparing" | "ready" | "failed";
+    };
+    /** RecordingSettings */
+    RecordingSettings: {
+      /**
+       * Enabled
+       * @default false
+       */
+      enabled?: boolean;
+      /**
+       * Max Concurrent
+       * @default 1
+       */
+      max_concurrent?: number;
+      /**
+       * Max Recording Bytes
+       * @default 107374182400
+       */
+      max_recording_bytes?: number;
+      /**
+       * Min Free Bytes
+       * @default 2147483648
+       */
+      min_free_bytes?: number;
+      /** Retention Days */
+      retention_days?: number | null;
+    };
+    /** RecordingSnapshot */
+    RecordingSnapshot: {
+      /** Category */
+      category?: string | null;
+      /** Channel Name */
+      channel_name: string;
+      /** Description */
+      description?: string | null;
+      /** Guide Channel Id */
+      guide_channel_id?: string | null;
+      /** Guide Source Uuid */
+      guide_source_uuid?: string | null;
+      /** Original End */
+      original_end?: string | null;
+      /** Original Start */
+      original_start?: string | null;
+      /** Provider Programme Id */
+      provider_programme_id?: string | null;
+      /** Subtitle */
+      subtitle?: string | null;
+      /** Title */
+      title: string;
+    };
+    /** RecordingView */
+    RecordingView: {
+      /** Actual End */
+      actual_end: string | null;
+      /** Actual Start */
+      actual_start: string | null;
+      /** Attempts */
+      attempts?: components["schemas"]["RecordingAttemptView"][];
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * End Time
+       * Format: date-time
+       */
+      end_time: string;
+      /** Files */
+      files?: components["schemas"]["RecordingFile"][];
+      /** Gaps */
+      gaps: components["schemas"]["RecordingGap"][];
+      /** Id */
+      id: string;
+      /** Protected */
+      protected: boolean;
+      /** Reason */
+      reason: string | null;
+      /** Revision */
+      revision: number;
+      snapshot: components["schemas"]["RecordingSnapshot"];
+      /**
+       * Start Time
+       * Format: date-time
+       */
+      start_time: string;
+      /**
+       * State
+       * @enum {string}
+       */
+      state: "scheduled" | "starting" | "recording" | "recovering" | "finalizing" | "completed" | "partial" | "failed" | "missed" | "cancelled" | "deleting" | "deleted";
+      /** Timezone */
+      timezone: string;
+      /** Tv Channel Id */
+      tv_channel_id: number | null;
     };
     /** RemotePlayerCommandRequest */
     RemotePlayerCommandRequest: {
@@ -3718,6 +4258,235 @@ export interface components {
        */
       content_id: string;
     };
+    /** RuntimeOption */
+    RuntimeOption: {
+      /** Default */
+      default: boolean | number | string;
+      /** Group */
+      group: string;
+      /** Help */
+      help: string;
+      /** Kind */
+      kind: string;
+      /** Label */
+      label: string;
+      /** Maximum */
+      maximum?: number | null;
+      /** Minimum */
+      minimum?: number | null;
+      /** Name */
+      name: string;
+    };
+    /** SavedSearchInput */
+    SavedSearchInput: {
+      /**
+       * Category
+       * @default
+       */
+      category?: string;
+      /** Name */
+      name: string;
+      /** Query */
+      query: string;
+      /**
+       * Refresh Enabled
+       * @default false
+       */
+      refresh_enabled?: boolean;
+    };
+    /** SavedSearchList */
+    SavedSearchList: {
+      /** Items */
+      items: components["schemas"]["SavedSearchView"][];
+      /** Total */
+      total: number;
+    };
+    /** SavedSearchPreview */
+    SavedSearchPreview: {
+      /**
+       * Expires In Seconds
+       * @default 300
+       */
+      expires_in_seconds?: number;
+      /** Preview Token */
+      preview_token: string;
+      result: components["schemas"]["SavedSearchResult"];
+    };
+    /** SavedSearchPreviewRequest */
+    SavedSearchPreviewRequest: {
+      definition?: components["schemas"]["SavedSearchInput"] | null;
+      /** Expected Revision */
+      expected_revision?: number | null;
+      /** Saved Search Id */
+      saved_search_id?: number | null;
+    };
+    /** SavedSearchResult */
+    SavedSearchResult: {
+      /**
+       * Added
+       * @default 0
+       */
+      added?: number;
+      /**
+       * Candidates Seen
+       * @default 0
+       */
+      candidates_seen?: number;
+      /**
+       * Deferred Candidates
+       * @default 0
+       */
+      deferred_candidates?: number;
+      /** Definition Revision */
+      definition_revision: number;
+      /**
+       * Duplicates
+       * @default 0
+       */
+      duplicates?: number;
+      /**
+       * Duration Seconds
+       * @default 0
+       */
+      duration_seconds?: number;
+      /**
+       * Excluded Candidates
+       * @default 0
+       */
+      excluded_candidates?: number;
+      /**
+       * Existing
+       * @default 0
+       */
+      existing?: number;
+      /**
+       * Finished At
+       * Format: date-time
+       */
+      finished_at: string;
+      /**
+       * Outcome
+       * @enum {string}
+       */
+      outcome: "complete" | "partial" | "failed" | "skipped" | "interrupted";
+      /**
+       * Pages Fetched
+       * @default 0
+       */
+      pages_fetched?: number;
+      /** Policy Revision */
+      policy_revision: number;
+      /**
+       * Resolved Content Ids
+       * @default 0
+       */
+      resolved_content_ids?: number;
+      /** Samples */
+      samples?: components["schemas"]["SearchImportOutcome"][];
+      /**
+       * Samples Truncated
+       * @default false
+       */
+      samples_truncated?: boolean;
+      /**
+       * Schema Version
+       * @default 1
+       */
+      schema_version?: number;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+      /** Stop Reason */
+      stop_reason?: string | null;
+      /**
+       * Unique Infohashes
+       * @default 0
+       */
+      unique_infohashes?: number;
+      /**
+       * Unresolved Candidates
+       * @default 0
+       */
+      unresolved_candidates?: number;
+    };
+    /** SavedSearchRunRequest */
+    SavedSearchRunRequest: {
+      /** Expected Revision */
+      expected_revision: number;
+      /** Preview Token */
+      preview_token?: string | null;
+    };
+    /** SavedSearchUpdate */
+    SavedSearchUpdate: {
+      /**
+       * Category
+       * @default
+       */
+      category?: string;
+      /** Expected Revision */
+      expected_revision: number;
+      /** Name */
+      name: string;
+      /** Query */
+      query: string;
+      /**
+       * Refresh Enabled
+       * @default false
+       */
+      refresh_enabled?: boolean;
+    };
+    /** SavedSearchView */
+    SavedSearchView: {
+      /**
+       * Category
+       * @default
+       */
+      category?: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Error Code */
+      error_code?: string | null;
+      /** Error Message */
+      error_message?: string | null;
+      /** Id */
+      id: number;
+      /** Last Attempt At */
+      last_attempt_at?: string | null;
+      /** Last Finished At */
+      last_finished_at?: string | null;
+      /** Last Outcome */
+      last_outcome?: ("complete" | "partial" | "failed" | "skipped" | "interrupted") | null;
+      last_result?: components["schemas"]["SavedSearchResult"] | null;
+      /** Last Started At */
+      last_started_at?: string | null;
+      /** Last Success At */
+      last_success_at?: string | null;
+      /** Name */
+      name: string;
+      /** Query */
+      query: string;
+      /**
+       * Refresh Enabled
+       * @default false
+       */
+      refresh_enabled?: boolean;
+      /** Revision */
+      revision: number;
+      /** Run Id */
+      run_id?: string | null;
+      /** Run State */
+      run_state?: ("waiting" | "running") | null;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
     /** ScanDefaultResponse */
     ScanDefaultResponse: {
       /** Cidr */
@@ -3805,12 +4574,80 @@ export interface components {
       channels: components["schemas"]["ChannelResult"][];
       /** Channels Found */
       channels_found: number;
+      /**
+       * Excluded Count
+       * @default 0
+       */
+      excluded_count?: number;
       /** Message */
       message: string;
       /** Status */
       status: string;
       /** Url */
       url: string;
+    };
+    /** SearchImportItem */
+    SearchImportItem: {
+      /**
+       * Category
+       * @default
+       */
+      category?: string;
+      /** Infohash */
+      infohash: string;
+      /** Name */
+      name: string;
+    };
+    /** SearchImportOutcome */
+    SearchImportOutcome: {
+      /** Content Id */
+      content_id?: string | null;
+      /** Infohash */
+      infohash: string;
+      /**
+       * Outcome
+       * @enum {string}
+       */
+      outcome: "added" | "existing" | "excluded" | "unresolved" | "duplicate" | "deferred";
+      /** Rule Ids */
+      rule_ids?: number[];
+    };
+    /** SearchImportRequest */
+    SearchImportRequest: {
+      /** Items */
+      items: components["schemas"]["SearchImportItem"][];
+    };
+    /** SearchImportResponse */
+    SearchImportResponse: {
+      /**
+       * Added
+       * @default 0
+       */
+      added?: number;
+      /**
+       * Deferred
+       * @default 0
+       */
+      deferred?: number;
+      /**
+       * Excluded
+       * @default 0
+       */
+      excluded?: number;
+      /**
+       * Existing
+       * @default 0
+       */
+      existing?: number;
+      /** Items */
+      items: components["schemas"]["SearchImportOutcome"][];
+      /** Policy Revision */
+      policy_revision: number;
+      /**
+       * Unresolved
+       * @default 0
+       */
+      unresolved?: number;
     };
     /** SearchPagination */
     SearchPagination: {
@@ -4018,6 +4855,47 @@ export interface components {
       settings: {
         [key: string]: string;
       };
+    };
+    /** SetupState */
+    SetupState: {
+      /** Api Protected */
+      api_protected: boolean;
+      /** Options */
+      options: components["schemas"]["RuntimeOption"][];
+      /** Restart Required */
+      restart_required: boolean;
+      /** Revision */
+      revision: string;
+      /** Runtime */
+      runtime: {
+        [key: string]: boolean | number | string;
+      };
+      /** Setup Complete */
+      setup_complete: boolean;
+      /** Unavailable */
+      unavailable: {
+        [key: string]: string;
+      };
+      /**
+       * Version
+       * @default 1
+       * @constant
+       */
+      version?: 1;
+    };
+    /** SetupUpdate */
+    SetupUpdate: {
+      /** Expected Revision */
+      expected_revision: string;
+      /** Runtime */
+      runtime: {
+        [key: string]: boolean | number | string;
+      };
+      /**
+       * Setup Complete
+       * @default true
+       */
+      setup_complete?: boolean;
     };
     /** StartupEvent */
     StartupEvent: {
@@ -4636,6 +5514,15 @@ export interface components {
     };
     /** TelegramPreviewMessage */
     TelegramPreviewMessage: {
+      /**
+       * Excluded Count
+       * @default 0
+       */
+      excluded_count?: number;
+      /** Excluded Rule Ids */
+      excluded_rule_ids?: {
+        [key: string]: number[];
+      };
       /** Message Id */
       message_id: number;
       /** Outcome */
@@ -4681,6 +5568,11 @@ export interface components {
        * @default
        */
       exclude?: string;
+      /**
+       * Excluded Count
+       * @default 0
+       */
+      excluded_count?: number;
       /**
        * Filter Mode
        * @default keyword
@@ -6659,6 +7551,39 @@ export interface operations {
       };
     };
   };
+  /** Settings */
+  settings_api_v1_config_recordings_get: {
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["RecordingSettings"];
+        };
+      };
+    };
+  };
+  /** Configure */
+  configure_api_v1_config_recordings_put: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecordingSettings"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["RecordingSettings"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   /**
    * Get Rescrape Interval
    * @description Get the interval between automatic rescrapes in hours.
@@ -7513,6 +8438,29 @@ export interface operations {
       };
     };
   };
+  /** Delete Event Source */
+  delete_event_source_api_v1_events_sources__source_id__delete: {
+    parameters: {
+      query: {
+        revision: number;
+      };
+      path: {
+        source_id: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        content: never;
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   /** Update Event Source */
   update_event_source_api_v1_events_sources__source_id__patch: {
     parameters: {
@@ -7650,6 +8598,125 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["HealthResponse"];
+        };
+      };
+    };
+  };
+  /** List Rules */
+  list_rules_api_v1_import_exclusions_get: {
+    parameters: {
+      query?: {
+        offset?: number;
+        limit?: number;
+        enabled?: boolean | null;
+        rule_id?: number | null;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["ExclusionList"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Create Rule */
+  create_rule_api_v1_import_exclusions_post: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExclusionInput"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        content: {
+          "application/json": components["schemas"]["ExclusionWrite"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Preview */
+  preview_api_v1_import_exclusions_preview_post: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExclusionPreviewRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["ExclusionPreview"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Delete Rule */
+  delete_rule_api_v1_import_exclusions__rule_id__delete: {
+    parameters: {
+      query: {
+        expected_revision: number;
+      };
+      path: {
+        rule_id: number;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        content: never;
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Update Rule */
+  update_rule_api_v1_import_exclusions__rule_id__patch: {
+    parameters: {
+      path: {
+        rule_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExclusionUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["ExclusionWrite"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
     };
@@ -8235,6 +9302,363 @@ export interface operations {
       };
     };
   };
+  /** Listing */
+  listing_api_v1_recordings_get: {
+    parameters: {
+      query?: {
+        offset?: number;
+        limit?: number;
+        state?: ("scheduled" | "starting" | "recording" | "recovering" | "finalizing" | "completed" | "partial" | "failed" | "missed" | "cancelled" | "deleting" | "deleted") | null;
+        search?: string | null;
+        tv_channel_id?: number | null;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["RecordingList"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Create */
+  create_api_v1_recordings_post: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecordingCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        content: {
+          "application/json": components["schemas"]["RecordingView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Capabilities */
+  capabilities_api_v1_recordings_capabilities_get: {
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["RecordingCapabilities"];
+        };
+      };
+    };
+  };
+  /** Current Programme */
+  current_programme_api_v1_recordings_current_programme_get: {
+    parameters: {
+      query: {
+        tv_channel_id: number;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["ProgrammeSelection"] | null;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Upcoming */
+  upcoming_api_v1_recordings_upcoming_get: {
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["RecordingList"];
+        };
+      };
+    };
+  };
+  /** Detail */
+  detail_api_v1_recordings__rid__get: {
+    parameters: {
+      path: {
+        rid: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["RecordingView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Delete */
+  delete_api_v1_recordings__rid__delete: {
+    parameters: {
+      path: {
+        rid: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        content: {
+          "application/json": components["schemas"]["RecordingView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Edit */
+  edit_api_v1_recordings__rid__patch: {
+    parameters: {
+      path: {
+        rid: string;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecordingEdit"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["RecordingView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Cancel */
+  cancel_api_v1_recordings__rid__cancel_post: {
+    parameters: {
+      path: {
+        rid: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        content: {
+          "application/json": components["schemas"]["RecordingView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Convert */
+  convert_api_v1_recordings__rid__conversions_post: {
+    parameters: {
+      path: {
+        rid: string;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecordingConversion"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        content: {
+          "application/json": components["schemas"]["RecordingFile"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** File */
+  file_api_v1_recordings__rid__files__fid__get: {
+    parameters: {
+      query?: {
+        download?: boolean;
+      };
+      path: {
+        rid: string;
+        fid: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** File */
+  file_api_v1_recordings__rid__files__fid__head: {
+    parameters: {
+      query?: {
+        download?: boolean;
+      };
+      path: {
+        rid: string;
+        fid: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Open Playback */
+  open_playback_api_v1_recordings__rid__playback_sessions_post: {
+    parameters: {
+      path: {
+        rid: string;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecordingPlaybackRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        content: {
+          "application/json": components["schemas"]["RecordingPlaybackView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Playback Status */
+  playback_status_api_v1_recordings__rid__playback_sessions__sid__get: {
+    parameters: {
+      path: {
+        rid: string;
+        sid: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["RecordingPlaybackView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Close Playback */
+  close_playback_api_v1_recordings__rid__playback_sessions__sid__delete: {
+    parameters: {
+      path: {
+        rid: string;
+        sid: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        content: never;
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Stop */
+  stop_api_v1_recordings__rid__stop_post: {
+    parameters: {
+      path: {
+        rid: string;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        content: {
+          "application/json": components["schemas"]["RecordingView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   /** Saved remote players */
   list_players_api_v1_remote_players_get: {
     responses: {
@@ -8500,6 +9924,172 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["RemotePlayerProbeResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** List Searches */
+  list_searches_api_v1_saved_searches_get: {
+    parameters: {
+      query?: {
+        offset?: number;
+        limit?: number;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["SavedSearchList"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Create Search */
+  create_search_api_v1_saved_searches_post: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SavedSearchInput"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        content: {
+          "application/json": components["schemas"]["SavedSearchView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Preview */
+  preview_api_v1_saved_searches_preview_post: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SavedSearchPreviewRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["SavedSearchPreview"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Get Search */
+  get_search_api_v1_saved_searches__search_id__get: {
+    parameters: {
+      path: {
+        search_id: number;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["SavedSearchView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Delete Search */
+  delete_search_api_v1_saved_searches__search_id__delete: {
+    parameters: {
+      query: {
+        expected_revision: number;
+      };
+      path: {
+        search_id: number;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        content: never;
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Update Search */
+  update_search_api_v1_saved_searches__search_id__patch: {
+    parameters: {
+      path: {
+        search_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SavedSearchUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["SavedSearchView"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Run Search */
+  run_search_api_v1_saved_searches__search_id__run_post: {
+    parameters: {
+      path: {
+        search_id: number;
+      };
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SavedSearchRunRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        content: {
+          "application/json": components["schemas"]["SavedSearchView"];
         };
       };
       /** @description Validation Error */
@@ -8815,7 +10405,7 @@ export interface operations {
       /** @description Successful Response */
       200: {
         content: {
-          "application/json": unknown;
+          "application/json": components["schemas"]["SearchImportResponse"];
         };
       };
       /** @description Validation Error */
@@ -8840,7 +10430,29 @@ export interface operations {
       /** @description Successful Response */
       200: {
         content: {
-          "application/json": unknown;
+          "application/json": components["schemas"]["SearchImportResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Import Search Results */
+  import_search_results_api_v1_search_import_post: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SearchImportRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["SearchImportResponse"];
         };
       };
       /** @description Validation Error */
@@ -8891,6 +10503,39 @@ export interface operations {
       200: {
         content: {
           "application/json": components["schemas"]["ResolvedSearchResult"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  /** Get Setup */
+  get_setup_api_v1_setup_get: {
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["SetupState"];
+        };
+      };
+    };
+  };
+  /** Save Setup */
+  save_setup_api_v1_setup_put: {
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SetupUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        content: {
+          "application/json": components["schemas"]["SetupState"];
         };
       };
       /** @description Validation Error */

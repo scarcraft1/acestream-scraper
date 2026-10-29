@@ -12,6 +12,7 @@ jest.mock('@mui/material', () => {
   const actual = jest.requireActual('@mui/material');
   return { ...actual, useMediaQuery: jest.fn() };
 });
+jest.mock('../components/SetupNotice', () => ({ __esModule: true, default: () => null }));
 jest.mock('../components/UpdateAvailableNotice', () => ({ __esModule: true, default: () => null }));
 jest.mock('../pages/TVDashboard', () => ({ __esModule: true, default: () => <h1>TV dashboard</h1> }));
 jest.mock('../pages/SystemDashboard', () => ({ __esModule: true, default: () => <h1>System status</h1> }));
@@ -39,7 +40,7 @@ describe('routes', () => {
   });
 
   it('exposes destinations whose labels are the page titles', () => {
-    expect(navItems.map((item) => item.text)).toEqual(['TV dashboard', 'Live TV', 'Catalogues', 'Events', 'System status', 'Scraper', 'Search', 'Acestream Channels', 'TV Channels', 'EPG', 'Playlist', 'Public address', 'Web player', 'Remote players', 'Media servers', 'Telegram', 'WARP', 'Settings', 'Changelog']);
+    expect(navItems.map((item) => item.text)).toEqual(['TV dashboard', 'Live TV', 'Recordings', 'Catalogues', 'Events', 'System status', 'Scraper', 'Search', 'Acestream Channels', 'TV Channels', 'EPG', 'Playlist', 'Public address', 'Web player', 'Remote players', 'Media servers', 'Telegram', 'WARP', 'Settings', 'Changelog']);
     expect(getNavTitle('/')).toBe('TV dashboard');
     expect(getNavTitle('/system')).toBe('System status');
     expect(getNavTitle('/events')).toBe('Events');

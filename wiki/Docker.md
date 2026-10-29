@@ -129,6 +129,13 @@ changes, or extra capabilities are needed. `linux/arm/v7` builds and installs
 but has not been runtime-tested on real ARMv7 hardware yet, so treat it as
 experimental.
 
+The bundled ARM engines resolve native connectivity checks and DHT bootstrap
+names through a shared listener backed by the Python resolver. It follows the
+container's configured DNS servers, including WARP changes, and retains local
+host aliases. No public DNS server or fixed hostname list is imposed. See the
+[native DNS investigation](https://github.com/Pipepito/acestream-scraper/blob/develop/docs/ops/arm64-mod-detected.md#native-libc-dns-follow-up-issue-253)
+for verification and ARMv7 limitations.
+
 WARP is installed in every flavor's `linux/amd64` and `linux/arm64` images, but it only starts when `ENABLE_WARP=true` (it needs `--cap-add NET_ADMIN --cap-add SYS_ADMIN` and `--device /dev/net/tun`). The `linux/arm/v7` images ship without the WARP client (Cloudflare publishes no 32-bit ARM build), so `ENABLE_WARP` is unsupported there.
 
 ZeroNet works in two modes. The `linux/amd64` and `linux/arm64` images bundle a [zeronet-conservancy](https://github.com/zeronet-conservancy/zeronet-conservancy) node, pinned by commit to a state that carries DHT peer discovery — opt-in, nothing runs until `ENABLE_ZERONET=true` (add `ENABLE_TOR=true` for TOR, like the v1 image). The node runs on its own Python 3.11 under `/opt/zeronet` because its dependency set predates the app's Python; 32-bit ARM images ship without it because gevent publishes no armv7l wheels — there, and whenever you prefer it, ZeroNet runs as an external sidecar/service and the app reaches it through `ZERONET_URL`.
@@ -459,3 +466,20 @@ For a bundled playback engine sharing Gluetun’s network namespace, opt into
 forwarded-port synchronization with `ACESTREAM_GLUETUN_PORT_FILE`. See
 [Gluetun setup](Gluetun.md) for the shared read-only directory, port ownership,
 restart behavior and provider requirements.
+
+
+## First-run configuration on develop
+
+The web wizard at `/setup` saves reviewed runtime options in
+`runtime-config.json` beside the SQLite database (normally `/app/config`). Keep the
+whole directory mounted and writable. Environment values for migrated options seed
+only a missing file; use **Settings → Setup wizard** for subsequent changes, then
+restart. Image selection, ports, volumes, capabilities and private credentials
+remain in Compose. Existing database preferences remain authoritative. See
+[configuration precedence](Configuration.md#first-run-setup) and the
+[option audit](../docs/dev/runtime-configuration-audit.md). This development feature
+is not evidence that the currently published stable image includes it.
+
+## Recording storage
+
+For built-in DVR, mount an existing persistent directory, set `RECORDINGS_DIR` to its absolute container path and enable recordings in Settings → Automation. Keep it separate from player HLS/cache storage. See [Recordings](Recordings.md) for admission, retention, permissions and rollback.

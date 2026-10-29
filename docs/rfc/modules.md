@@ -1,7 +1,7 @@
 # RFC: one import pipeline, and roles for pluggable modules
 
 Companion to the design-question issue "one import pipeline, and a path towards pluggable sources".
-Read against `develop` at `997dfe7`. Code paths are relative to `backend/app/` unless stated otherwise.
+Read against `develop` at `c604e0a`. Code paths are relative to `backend/app/` unless stated otherwise. Between `997dfe7` and `c604e0a` only `tuner_http_source.py` changed, and nothing here cites it.
 All examples are made up (`example://`, `https://example.invalid/list.m3u`, placeholder codes).
 
 ## 0. What is actually being proposed
@@ -18,8 +18,8 @@ future. If you prefer to stop after phase 1, or to never take a plugin registry 
 is a perfectly good outcome; anything we need beyond it would stay in our fork, on top of `develop`.
 
 Labels used below:
-- **read at 997dfe7**: checked in the code at that commit, with `file:line`.
-- **measured**: counted with `grep` at `997dfe7`, or observed in a test run (section 10).
+- **read at c604e0a**: checked in the code at that commit, with `file:line`.
+- **measured**: counted with `grep` at `c604e0a`, or observed in a test run (section 10).
 - **prototype**: built and tested in a local prototype on top of `develop`; not proposed as code.
 - Everything else is a proposal and does not exist yet.
 
@@ -28,9 +28,9 @@ Labels used below:
 ## 1. Summary
 
 1. The scraper turns references into channels along five separate write paths, each with its own
-   table, service, task and page (read at 997dfe7).
+   table, service, task and page (read at c604e0a).
 2. There is no common interface. The core knows Telegram, saved searches, events and W3U catalogues
-   by name (read at 997dfe7).
+   by name (read at c604e0a).
 3. The design names **seven roles** with a fixed contract: sources, discoverers, resolvers,
    playback engines, outputs, guides, and notifications/commands. Separately there are
    **infrastructure services** (programs behind an address) and a support piece, the **recipe helper**.
@@ -49,7 +49,7 @@ Labels used below:
 
 Facts, with the cost each one adds when something new is added.
 
-### 2.1 Five import paths (read at 997dfe7)
+### 2.1 Five import paths (read at c604e0a)
 
 | Path | Inserts at | Exclusions checked | Prunes | TV channels from EPG | Auto-match |
 |---|---|---|---|---|---|
@@ -113,7 +113,7 @@ Facts, with the cost each one adds when something new is added.
 - **Cost:** a new resolver is a core change today. In the prototype, moving three FAST providers to
   a separate package touched none of those call sites.
 
-### 2.4 The core knows concrete pieces (read at 997dfe7)
+### 2.4 The core knows concrete pieces (read at c604e0a)
 
 - `ChannelRepository.remove_search_memberships` (`channel_repository.py:442`): deleting a channel
   requires knowing that saved searches exist.
@@ -128,7 +128,7 @@ Facts, with the cost each one adds when something new is added.
 - **Cost:** each of the last three source kinds (W3U, events, searches) added its own call in
   `url_scraping_task.py`, its own key in the notification and its own summary. A fourth would too.
 
-### 2.5 Three guarded HTTP families and seven redirect loops (read at 997dfe7)
+### 2.5 Three guarded HTTP families and seven redirect loops (read at c604e0a)
 
 - Families: `utils/outbound_http.py` (`source_session` on aiohttp; `source_get`/`source_post_json`
   on requests), `utils/bounded_source.py` (bounded reads) and `utils/url_guard.py` (validation).
@@ -137,7 +137,7 @@ Facts, with the cost each one adds when something new is added.
   `w3u_parser.py:189-250`, `epg_sources.py:185-200`, `live_providers/base.py:25-43`.
 - **Cost:** each new piece picks a family and copies the loop; a guard fix lands in seven places.
 
-### 2.6 Four configuration layers (read at 997dfe7)
+### 2.6 Four configuration layers (read at c604e0a)
 
 1. Environment → `Settings` (pydantic-settings), with legacy aliases.
 2. `runtime-config.json` (#278), overriding the environment for the 31 options in
@@ -149,7 +149,7 @@ Facts, with the cost each one adds when something new is added.
   and never read: the factory hard-codes 10/3 and 20/5 (`scrapers/__init__.py:28-37`).
 - **Cost:** a new piece has no obvious place for its options nor a way to render them.
 
-### 2.7 Five shapes of "how did the last run go" (read at 997dfe7)
+### 2.7 Five shapes of "how did the last run go" (read at c604e0a)
 
 `scraped_urls.status/last_processed/error_count`; `event_schedule_sources.last_attempt/last_success/last_result`;
 `saved_searches.last_*` + `run_state`; `telegram_sources.state/last_success/message`;
@@ -160,7 +160,7 @@ Facts, with the cost each one adds when something new is added.
 only for the exact `'OK'` (`frontend/src/pages/Scraper.tsx:70`). **Cost:** no common view of
 "which source is failing".
 
-### 2.8 Infrastructure handled three ways (read at 997dfe7)
+### 2.8 Infrastructure handled three ways (read at c604e0a)
 
 - IPFS and ZeroNet by address (`IPFS_GATEWAY_URL`, `ZERONET_URL`).
 - WARP by process (`warp-cli` through `subprocess`, `warp_service.py:38`).
@@ -612,7 +612,7 @@ existing migrations.
   including the ZeroNet `.m3u` shortcut); Telegram failing after import does not advance the cursor.
 - **Rollback:** revert. No schema change.
 
-Behaviour per path today, and with the pipeline (read at 997dfe7):
+Behaviour per path today, and with the pipeline (read at c604e0a):
 
 | Path | Session and commit | Exclusions | Writes | Prunes | Status written | With the pipeline |
 |---|---|---|---|---|---|---|

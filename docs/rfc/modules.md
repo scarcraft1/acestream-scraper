@@ -43,6 +43,26 @@ Labels used below:
 7. Nodes and tunnels (IPFS, ZeroNet, Tor, WARP, Gluetun) stay behind an address. Any piece that
    creates containers would be a separate, optional project, never part of the scraper.
 
+```mermaid
+flowchart TB
+    subgraph CORE["Core (scraper)"]
+        PIPE["Import pipeline"]
+        Q["Proposals queue"]
+        REG["Module registry"]
+    end
+    DISC["Discoverers"] -->|"suggest"| Q
+    Q -->|"a person approves"| SRC["Sources"]
+    SRC -->|"entries"| PIPE
+    PIPE --> DB[("channels")]
+    DB --> RES["Resolvers"] --> ENG["Playback engines"]
+    DB --> OUT["Outputs<br/>m3u, HDHomeRun, web player, Xtream"]
+    GUIDE["Guides"] --> OUT
+    NOTE["Notifications / commands"] -.-> CORE
+    SVC["Infrastructure services<br/>IPFS, ZeroNet, Tor, WARP, Gluetun"] -.->|"by address"| SRC
+    REG -.->|"registers"| SRC & DISC & RES & ENG & OUT & GUIDE & NOTE
+```
+*Direction only: the seven roles around the core. Nothing here beyond the pipeline is proposed yet.*
+
 ---
 
 ## 2. The problem
@@ -79,6 +99,21 @@ Facts, with the cost each one adds when something new is added.
 - **Cost:** a new kind of source picks one of the five paths and inherits its semantics. In the
   prototype, a paste-site source had to reuse `_apply_scrape` from inside `ScraperService` to get
   pruning and exclusions.
+
+```mermaid
+flowchart LR
+    L["M3U / ZeroNet / IPFS lists"] --> A["ScraperService._apply_scrape<br/>upsert + prune + EPG TV channels + auto-match"]
+    W["W3U catalogue"] --> B["CatalogueService._save<br/>insert if missing"]
+    T["Telegram message"] --> C["ingest_records<br/>insert if missing"]
+    S["Saved search"] --> D["apply_candidates<br/>insert if missing"]
+    M["Manual add"] --> E["acestreamchannel_service<br/>upsert"]
+    A --> DB[("acestream_channels")]
+    B --> DB
+    C --> DB
+    D --> DB
+    E --> DB
+```
+*Today: five writers, each with its own exclusion check, fields and rules.*
 
 ### 2.2 The playback engine is chosen by an ID prefix (measured)
 
@@ -611,6 +646,23 @@ existing migrations.
   anything moves; regression for the pruning rules (empty, recipe, status other than `'OK'`,
   including the ZeroNet `.m3u` shortcut); Telegram failing after import does not advance the cursor.
 - **Rollback:** revert. No schema change.
+
+```mermaid
+flowchart LR
+    L["Lists"] -->|"mode=snapshot"| P
+    W["W3U"] -->|"mode=insert_only"| P
+    T["Telegram"] -->|"mode=insert_only"| P
+    S["Saved search"] -->|"mode=insert_only"| P
+    M["Manual add"] -->|"mode=manual"| P
+    subgraph P["ImportPipeline.apply - caller's session, no commit"]
+        direction TB
+        X["exclusions"] --> U["insert or upsert, by mode"]
+        U --> R["prune: only snapshot,<br/>status exactly 'OK', no recipe"]
+        R --> E["EPG TV channels + auto-match,<br/>where they run today"]
+    end
+    P --> DB[("acestream_channels")]
+```
+*Phase 1: the same five callers and the same results, through one place.*
 
 Behaviour per path today, and with the pipeline (read at c604e0a):
 

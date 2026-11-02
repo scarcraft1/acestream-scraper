@@ -194,8 +194,8 @@ def test_socks_reports_refused_and_unsupported_commands():
     asyncio.run(scenario())
 
 
-def test_dockerfile_fork_installs_the_helpers():
-    text = (ROOT / "Dockerfile.fork").read_text()
+def test_dockerfile_installs_the_helpers():
+    text = (ROOT / "Dockerfile").read_text()
     for name in ("warp-setup.sh", "warp-inbound.sh", "warp-socks.py", "tcp-forward.py"):
         assert name in text, name
 

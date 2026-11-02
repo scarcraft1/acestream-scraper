@@ -334,7 +334,10 @@ class PlaylistService:
                     # relay and its failover: Antena 3, laSexta, Neox, Nova and
                     # Mega opened /live/ directly once their official source
                     # ranked first, with no fallback to their acestreams.
-                    link = base_url.replace("{tv_channel_id}", str(tv_channel.id))
+                    # Through _stream_link, without the source's own URL: a
+                    # protected playlist adds the viewer's playback token there.
+                    link = self._stream_link(base_url, stream.id, tv_channel_id=tv_channel.id,
+                                             live_base_url=self.live_base_url)
                 else:
                     link = self._stream_link(base_url, stream.id, pid_counter if addpid else None, tv_channel_id=tv_channel.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None), live_base_url=self.live_base_url)
                 lines.extend(self._link_lines(link))

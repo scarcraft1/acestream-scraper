@@ -12465,6 +12465,12 @@
             "title": "Friendly Name",
             "type": "string"
           },
+          "hide_unusable": {
+            "default": false,
+            "description": "Leave out sources no list has published for two weeks or whose recent playback clearly failed, and channels left with none (lineup and M3U playlists)",
+            "title": "Hide Unusable",
+            "type": "boolean"
+          },
           "max_channels": {
             "title": "Max Channels",
             "type": "integer"
@@ -12535,6 +12541,17 @@
               }
             ],
             "title": "Friendly Name"
+          },
+          "hide_unusable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hide Unusable"
           },
           "max_channels": {
             "anyOf": [
@@ -13989,6 +14006,22 @@
               "default": false,
               "title": "Per Source",
               "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_unusable",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hide Unusable"
             }
           },
           {
@@ -21546,6 +21579,24 @@
             }
           },
           {
+            "description": "Override the tuner hide_unusable setting for this request.",
+            "in": "query",
+            "name": "hide_unusable",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Override the tuner hide_unusable setting for this request.",
+              "title": "Hide Unusable"
+            }
+          },
+          {
             "in": "query",
             "name": "favorites_only",
             "required": false,
@@ -21755,6 +21806,24 @@
               "description": "TV relay formats: list each source under its channel, to switch by hand.",
               "title": "Per Source",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Override the tuner hide_unusable setting for this request.",
+            "in": "query",
+            "name": "hide_unusable",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Override the tuner hide_unusable setting for this request.",
+              "title": "Hide Unusable"
             }
           },
           {
@@ -27627,6 +27696,22 @@
           },
           {
             "in": "query",
+            "name": "hide_unusable",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hide Unusable"
+            }
+          },
+          {
+            "in": "query",
             "name": "include_groups",
             "required": false,
             "schema": {
@@ -27812,6 +27897,22 @@
               "default": false,
               "title": "Per Source",
               "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_unusable",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Hide Unusable"
             }
           },
           {

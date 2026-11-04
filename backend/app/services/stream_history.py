@@ -45,6 +45,9 @@ DEAD_LIST_SHARE = 0.2
 BAD_EVIDENCE = 2.0
 BAD_SCORE = 0.25
 PRUNE_EVERY = 500
+# One «bad audio» report only sends a source back; it hides it from this many on
+# (Óscar, 04-11: «si la misma fuente se marca varias veces»).
+BAD_AUDIO_REPORTS_TO_HIDE = 2
 # A row written with a clock that ran ahead (a box switched on before its clock
 # synchronised) says nothing reliable about when it happened: it is ignored
 # instead of counting as the most recent attempt.
@@ -61,6 +64,10 @@ OUTCOME_VALUE = {
     # Played, but its clock kept going back: the viewer saw the same play
     # again and again. Low, and weighted by how long it was watched.
     'jumpy': 0.1,
+    # The viewer said the audio was wrong (03-11: radio commentary over the
+    # match): it played, but not what they wanted. Weighted by how long it was
+    # watched, like jumpy.
+    'bad_audio': 0.0,
     'early_death': 0.0,
     'no_data': 0.0,
     'empty_session': 0.0,
@@ -96,7 +103,7 @@ def score_sources(streams: Iterable, attempts, list_health: Dict[str, tuple[int,
             continue
         age_days = max(0.0, (now - _aware(created_at)).total_seconds() / 86400)
         weight = 0.5 ** (age_days / HALF_LIFE_DAYS)
-        if value > 0:
+        if value > 0 or outcome == 'bad_audio':
             weight *= min(MAX_PLAYED_WEIGHT, 1.0 + max(0.0, seconds or 0.0) / PLAYED_SECONDS_PER_ATTEMPT)
         total = weighted.setdefault(content_id.lower(), [0.0, 0.0])
         total[0] += weight * value
@@ -154,9 +161,20 @@ def unusable_ids(db, streams, now: Optional[datetime] = None) -> set[str]:
     now and then are often hours or days old. Used by the playlist's
     ``hide_unusable`` option; a source becomes usable again as soon as a list
     publishes it or it plays."""
+    from app.repositories.stream_attempt_repository import StreamAttemptRepository
     now = now or datetime.now(timezone.utc)
     streams = list(streams)
-    scores = scores_for(db, streams, now)
+    repo = StreamAttemptRepository(db)
+    attempts = repo.attempts_since((s.id for s in streams), now - timedelta(days=HISTORY_DAYS))
+    reports: Dict[str, int] = {}
+    for content_id, outcome, _seconds, _created in attempts:
+        if outcome == 'bad_audio':
+            reports[content_id.lower()] = reports.get(content_id.lower(), 0) + 1
+    # Below the report threshold, a report does not count towards hiding.
+    attempts = [a for a in attempts
+                if a[1] != 'bad_audio' or reports.get(a[0].lower(), 0) >= BAD_AUDIO_REPORTS_TO_HIDE]
+    health = repo.list_health(getattr(s, 'source_url', None) for s in streams)
+    scores = score_sources(streams, attempts, health, now)
     reference = _latest_list_reading(db, now)
     unusable = set()
     for stream in streams:

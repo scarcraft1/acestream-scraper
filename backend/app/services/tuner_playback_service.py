@@ -128,6 +128,17 @@ def record_outcome(content_id: str, tv_channel_id: int | None, outcome: str, *, 
 CHECKPOINT_SECONDS = 30.0
 
 
+# What a viewer can report about the source playing (the Kodi add-on's menu).
+REPORTED_OUTCOMES = ('bad_audio',)
+
+
+def _reported(outcome: str, claim) -> str:
+    """A source the viewer reported keeps the report as its outcome, however its
+    viewing ends; one that never played keeps its own."""
+    problem = getattr(claim, 'problem', None)
+    return problem if problem and outcome in ('ok', 'ended', 'stall', 'jumpy', 'handover') else outcome
+
+
 class ViewingCheckpoint:
     """Writes one attempt's progress at most every CHECKPOINT_SECONDS."""
 
@@ -139,7 +150,9 @@ class ViewingCheckpoint:
         self.outcome: str | None = None
 
     def tick(self, played: float, outcome: str = 'ok') -> None:
-        if played >= CHECKPOINT_SECONDS and played - self.written_at >= CHECKPOINT_SECONDS:
+        # A report is written at once: the viewer usually changes channel next.
+        reported = outcome in REPORTED_OUTCOMES and outcome != self.outcome
+        if reported or (played >= CHECKPOINT_SECONDS and played - self.written_at >= CHECKPOINT_SECONDS):
             self.written_at, self.outcome = played, outcome
             record_outcome(self.content_id, self.tv_channel_id, outcome, seconds=played,
                            attempt=self.attempt, final=False)
@@ -189,7 +202,7 @@ def _record_ok(opening: ChannelOpening | None, content_id: str, tv_channel_id: i
         return
 
     def settle() -> None:
-        final = 'handover' if opening.superseded else outcome
+        final = 'handover' if opening.superseded and outcome not in REPORTED_OUTCOMES else outcome
         record_outcome(content_id, tv_channel_id, final, seconds=seconds, attempt=attempt)
     try:
         asyncio.get_running_loop().call_later(STOP_LINGER_SECONDS, settle)
@@ -392,7 +405,7 @@ async def relay_ranked_streams(
                             chunk = await anext(iterator)
                         last_at = time.monotonic()
                         yield chunk
-                        checkpoint.tick(last_at - first_at, _with_clock('ok', clock_watch))
+                        checkpoint.tick(last_at - first_at, _reported(_with_clock('ok', clock_watch), claim))
                         if opening is not None and opening.superseded:
                             # The newer GET plays this source too: Kodi left this one.
                             return
@@ -421,7 +434,7 @@ async def relay_ranked_streams(
                         'engine_unavailable' if isinstance(exc, EngineUnavailableError) else
                         'upstream_error'
                     )
-                    checkpoint.finish(_with_clock(outcome, clock_watch), played)
+                    checkpoint.finish(_reported(_with_clock(outcome, clock_watch), claim), played)
                     if opening is not None:
                         opening.failed.append(content_id)
                     # Count delivery only through the last chunk, regardless of
@@ -447,7 +460,7 @@ async def relay_ranked_streams(
                     if outcome is None and first_at is not None:
                         # The viewer left, or a newer GET took over.
                         _record_ok(opening, content_id, tv_channel_id, last_at - first_at,
-                                   outcome=_with_clock('ok', clock_watch),
+                                   outcome=_reported(_with_clock('ok', clock_watch), claim),
                                    attempt=checkpoint.attempt)
                     with anyio.CancelScope(shield=True):
                         await iterator.aclose()

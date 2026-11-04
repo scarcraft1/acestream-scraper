@@ -328,3 +328,62 @@ def test_the_checkpoint_writes_nothing_before_30_s_and_then_every_30_s(monkeypat
         checkpoint.tick(played)
     checkpoint.finish('ended', 70)
     assert calls == [('ok', 30, False), ('ok', 60.5, False), ('ended', 70, True)]
+
+
+def test_a_report_goes_to_the_source_this_client_is_watching_now():
+    from app.services.stream_relay import RelayRegistry
+    registry = RelayRegistry()
+    other = registry.open('b' * 40, 'tuner:192.0.2.9')
+    registry.source_playing(other.id)
+    probing = registry.open('c' * 40, 'tuner:192.0.2.1')
+    assert registry.report('tuner:192.0.2.1', 'bad_audio') is None
+    registry.select_stream(probing.id, 'a' * 40)
+    registry.source_playing(probing.id)
+    assert registry.report('tuner:192.0.2.1', 'bad_audio') == 'a' * 40
+    assert (probing.problem, other.problem) == ('bad_audio', None)
+    registry.select_stream(probing.id, 'd' * 40)
+    assert probing.problem is None
+
+
+def test_a_reported_viewing_keeps_the_report_however_it_ends():
+    from app.services.tuner_playback_service import _reported
+
+    class Claim:
+        problem = 'bad_audio'
+    assert [_reported(o, Claim) for o in ('ok', 'stall', 'jumpy', 'handover', 'no_data')] == \
+        ['bad_audio', 'bad_audio', 'bad_audio', 'bad_audio', 'no_data']
+    Claim.problem = None
+    assert _reported('ok', Claim) == 'ok'
+
+
+def test_a_report_is_written_at_once_even_before_30_s(monkeypatch):
+    from app.services.tuner_playback_service import ViewingCheckpoint
+    calls = []
+    monkeypatch.setattr(tuner_playback_service, '_outcome_recorder',
+                        lambda cid, tv, outcome, **kw: calls.append((outcome, kw['seconds'])))
+    checkpoint = ViewingCheckpoint('a' * 40, 1)
+    checkpoint.tick(5, 'ok')
+    checkpoint.tick(6, 'bad_audio')
+    checkpoint.tick(7, 'bad_audio')
+    assert calls == [('bad_audio', 6)]
+
+
+def test_a_reported_source_goes_after_one_that_played(db_session):
+    tv = _channel(db_session)
+    _stream(db_session, 'a', tv)
+    _stream(db_session, 'b', tv)
+    _attempts(db_session, 'a', 'bad_audio', 1, seconds=2100)
+    _attempts(db_session, 'b', 'ok', 1, seconds=600)
+    db_session.commit()
+    assert TunerService(db_session).relay_stream_ids(tv.id) == ['b' * 40, 'a' * 40]
+
+
+def test_one_report_does_not_hide_a_source_and_two_do(db_session):
+    tv = _channel(db_session)
+    _stream(db_session, 'a', tv)
+    _attempts(db_session, 'a', 'bad_audio', 1, seconds=2100)
+    db_session.commit()
+    assert 'Example Sports' in _playlist(db_session, hide_unusable=True)
+    _attempts(db_session, 'a', 'bad_audio', 1, seconds=2100)
+    db_session.commit()
+    assert 'Example Sports' not in _playlist(db_session, hide_unusable=True)

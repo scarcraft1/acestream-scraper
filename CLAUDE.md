@@ -926,5 +926,6 @@ each freshness group by decayed playback history with the list's online share
 as prior, and demotes, never drops, sources unseen by any list for 14 days,
 with clearly bad recent history, or from mostly offline lists without own
 history. Saved preferences stay first; engine outages do not count against a
-source. Migration `20261102_1200` follows `20261103_1200`. See
+source. Migration `20261102_1200` follows `20261103_1200`; in this fork the empty revision
+`20261104_1200` follows it (the box applied it on 04-11, so it must stay). See
 `docs/ops/stream-history.md`.

@@ -287,3 +287,17 @@ async def test_individual_source_going_silent_ends_the_stream_as_a_stall(monkeyp
     assert len(chunks) == 1
     assert recorded == [(IH, 'stall')]
     assert engine.closed
+
+
+def test_report_marks_the_source_this_client_watches(client, open_gate):
+    from app.services.stream_relay import relay_registry
+    assert client.post("/tuner/report", params={"problem": "loud"}).status_code == 400
+    assert client.post("/tuner/report", params={"problem": "bad_audio"}).status_code == 404
+    info = relay_registry.open(IH, "tuner:testclient")
+    try:
+        relay_registry.source_playing(info.id)
+        answer = client.post("/tuner/report", params={"problem": "bad_audio"})
+        assert answer.status_code == 200 and answer.json() == {"content_id": IH, "problem": "bad_audio"}
+        assert info.problem == "bad_audio"
+    finally:
+        relay_registry.close(info.id)

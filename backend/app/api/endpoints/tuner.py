@@ -35,7 +35,8 @@ from app.services.stream_relay import RELAY_HEADERS, ClosingStreamingResponse, E
 from app.services.tuner_network import get_tuner_gate, require_tuner_network
 from app.services.tuner_service import TunerService, TunerSettings
 from app.services.tuner_playback_service import (
-    CHECKPOINT_SECONDS, ViewingCheckpoint, prefer_recovered_sources, record_outcome, relay_ranked_streams,
+    CHECKPOINT_SECONDS, REPORTED_OUTCOMES, ViewingCheckpoint, _reported, prefer_recovered_sources,
+    relay_ranked_streams,
 )
 from app.services.ts_clock import ClockWatch, watch_clock
 from app.services.tuner_remux import ffmpeg_binary
@@ -328,7 +329,7 @@ async def tuner_stream(content_id: str, request: Request):
             async for chunk in iterator:
                 yield chunk
                 played = time.monotonic() - started
-                checkpoint.tick(played, 'jumpy' if clock_watch.jumpy else 'ok')
+                checkpoint.tick(played, _reported('jumpy' if clock_watch.jumpy else 'ok', claim))
         except EngineStreamError as exc:
             # The engine went silent or dropped mid-stream. There is no other
             # source to go on to here, so the stream just ends: a cut, not a
@@ -339,7 +340,9 @@ async def tuner_stream(content_id: str, request: Request):
         finally:
             await iterator.aclose()
             engine.close()
-            if clock_watch.jumpy:
+            if claim.problem:
+                checkpoint.finish(claim.problem, played)
+            elif clock_watch.jumpy:
                 checkpoint.finish('jumpy', clock_watch.watched_seconds)
             elif cut:
                 checkpoint.finish('stall', played)
@@ -557,6 +560,20 @@ def clear_first_source(tv_channel_id: int, request: Request) -> Response:
 
 
 # --- operator API (/api/v1/tuner, token-gated) -------------------------------
+@hdhr_router.post('/report', include_in_schema=False)
+async def tuner_report(request: Request, problem: str = Query(...)):
+    """The viewer reports the source they are watching now (the Kodi add-on's
+    menu): its viewing is recorded as ``problem`` and the source goes after the
+    others next time. 404 when this client is watching nothing."""
+    if problem not in REPORTED_OUTCOMES:
+        raise HTTPException(400, 'Unknown problem')
+    content_id = relay_registry.report(f"tuner:{_client_address(request)}", problem)
+    if content_id is None:
+        raise HTTPException(404, 'Nothing is playing for this client')
+    logger.info("TV relay source reported content_id=%s problem=%s", content_id, problem)
+    return {'content_id': content_id, 'problem': problem}
+
+
 @router.get("/settings", response_model=TunerSettingsResponse, summary="Tuner settings")
 def get_tuner_settings(db: Session = Depends(get_db)) -> TunerSettingsResponse:
     return TunerSettingsResponse(**asdict(TunerService(db).settings()))

@@ -77,6 +77,9 @@ class RelayInfo:
     #: byte yet; ``playing`` once it has. Bytes the route sends of its own
     #: (the waiting card) do not count.
     source_state: Literal["probing", "playing"] = "probing"
+    #: What the viewer reported about the source playing now (``bad_audio``):
+    #: its viewing is recorded as that instead of how it ended.
+    problem: Optional[str] = None
 
 
 class RelayRegistry:
@@ -120,6 +123,7 @@ class RelayRegistry:
             info = self._relays[relay_id]
             info.content_id = content_id
             info.source_state = "probing"
+            info.problem = None
 
     def source_playing(self, relay_id: str) -> None:
         """The current source has delivered its first bytes."""
@@ -127,6 +131,19 @@ class RelayRegistry:
             info = self._relays.get(relay_id)
             if info is not None:
                 info.source_state = "playing"
+
+    def report(self, client_label: str, problem: str) -> Optional[str]:
+        """Mark the source ``client_label`` is watching now; its content id, or
+        None when that client is watching nothing."""
+        with self._lock:
+            playing = [info for info in self._relays.values()
+                       if info.finished_at is None and info.client_label == client_label
+                       and info.source_state == "playing"]
+            if not playing:
+                return None
+            info = max(playing, key=lambda i: i.started_at)
+            info.problem = problem
+            return info.content_id
 
     def close(self, relay_id: str) -> None:
         with self._lock:

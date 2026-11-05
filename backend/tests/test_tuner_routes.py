@@ -264,3 +264,40 @@ def test_report_marks_the_source_this_client_watches(client, open_gate):
         assert info.problem == "bad_audio"
     finally:
         relay_registry.close(info.id)
+
+
+@pytest.mark.asyncio
+async def test_individual_source_going_silent_ends_the_stream_as_a_stall(monkeypatch):
+    from types import SimpleNamespace
+    import httpx
+    from starlette.requests import Request
+    from app.api.endpoints import tuner
+    from app.services import tuner_playback_service
+    from app.services.stream_relay import EngineStreamError, RelayRegistry
+
+    class Engine:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    async def relay(*args, **kwargs):
+        yield b'\x47' + b'\xff' * 187
+        raise EngineStreamError('Engine stream failed') from httpx.ReadTimeout('silent')
+
+    engine, recorded = Engine(), []
+    registry = RelayRegistry()
+    monkeypatch.setattr(tuner, '_engine', lambda: engine)
+    monkeypatch.setattr(tuner, '_tuner_count', lambda: 1)
+    monkeypatch.setattr(tuner, '_relay_settings', lambda: SimpleNamespace(source_start_seconds=5, startup_budget_seconds=5))
+    monkeypatch.setattr(tuner, 'relay_registry', registry)
+    monkeypatch.setattr(tuner, 'relay_engine_stream', relay)
+    monkeypatch.setattr(tuner_playback_service, 'record_outcome',
+                        lambda content_id, tv_channel_id, outcome, **kw: recorded.append((content_id, outcome)))
+
+    response = await tuner.tuner_stream(IH, Request({'type': 'http', 'method': 'GET', 'headers': []}))
+    chunks = [chunk async for chunk in response.body_iterator]
+
+    assert len(chunks) == 1
+    assert recorded == [(IH, 'stall')]
+    assert engine.closed

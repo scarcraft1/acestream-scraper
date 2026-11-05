@@ -324,12 +324,21 @@ async def tuner_stream(content_id: str, request: Request):
         checkpoint = ViewingCheckpoint(content_id, None)
         started = time.monotonic()
         played = 0.0
+        cut = False
         try:
             yield first
             async for chunk in iterator:
                 yield chunk
                 played = time.monotonic() - started
                 checkpoint.tick(played, _reported('jumpy' if clock_watch.jumpy else 'ok', claim))
+        except EngineStreamError as exc:
+            # The engine went silent or dropped mid-stream (the box, 04-11: seven
+            # times in one evening). There is no other source to go on to here, so
+            # the stream just ends; it is a cut, not a good viewing, and not a
+            # server error either.
+            cut = True
+            logger.info("TV relay source ended content_id=%s reason=%s route=individual after %.1f s",
+                        content_id, type(exc.__cause__ or exc).__name__, played)
         finally:
             await iterator.aclose()
             engine.close()
@@ -337,6 +346,8 @@ async def tuner_stream(content_id: str, request: Request):
                 checkpoint.finish(claim.problem, played)
             elif clock_watch.jumpy:
                 checkpoint.finish('jumpy', clock_watch.watched_seconds)
+            elif cut:
+                checkpoint.finish('stall', played)
             elif played >= CHECKPOINT_SECONDS:
                 checkpoint.finish('ok', played)
 

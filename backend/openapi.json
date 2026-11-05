@@ -903,6 +903,21 @@
             ],
             "title": "Peers"
           },
+          "source_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "probing",
+                  "playing"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source State"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -12465,19 +12480,25 @@
             "type": "boolean"
           },
           "source_start_seconds": {
-            "default": 15,
+            "default": 20,
             "description": "Seconds a source gets to deliver its first byte before the next is tried",
             "title": "Source Start Seconds",
             "type": "integer"
           },
           "startup_budget_seconds": {
-            "default": 45,
-            "description": "Seconds for the whole start across sources; keep it under the player's own timeout (Kodi gives up after about 30)",
+            "default": 28,
+            "description": "Seconds for the whole start across sources; keep it under the player's limit (Kodi gives up after 30)",
             "title": "Startup Budget Seconds",
             "type": "integer"
           },
           "tuner_count": {
             "title": "Tuner Count",
+            "type": "integer"
+          },
+          "waiting_card_seconds": {
+            "default": 20,
+            "description": "Seconds without video before a \u00abConectando\u2026\u00bb card is sent while more sources are tried; 0 = never",
+            "title": "Waiting Card Seconds",
             "type": "integer"
           }
         },
@@ -12588,6 +12609,19 @@
               }
             ],
             "title": "Tuner Count"
+          },
+          "waiting_card_seconds": {
+            "anyOf": [
+              {
+                "maximum": 28.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Card Seconds"
           }
         },
         "title": "TunerSettingsUpdate",

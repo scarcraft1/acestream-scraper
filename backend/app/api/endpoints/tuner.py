@@ -26,7 +26,7 @@ from app.api.error_handlers import APIError
 from app.api.auth import authenticated_player_url
 from app.config.database import SessionLocal, get_db
 from app.repositories.settings_repository import SettingsRepository
-from app.schemas.tuner import TunerSettingsResponse, TunerSettingsUpdate, TunerStatusResponse, TunerUrls
+from app.schemas.tuner import TunerFirstSourceRequest, TunerSettingsResponse, TunerSettingsUpdate, TunerStatusResponse, TunerUrls
 from app.services.engine_client import EngineClient, EngineRefusedError, EngineUnavailableError, playback_client_from_settings
 from app.services.epg_service import EPGService
 from app.services.player_service import player_service
@@ -34,11 +34,11 @@ from app.services.public_url_service import resolve_public_base_url
 from app.services.stream_relay import RELAY_HEADERS, ClosingStreamingResponse, EngineStreamError, relay_engine_stream, relay_registry
 from app.services.tuner_network import get_tuner_gate, require_tuner_network
 from app.services.tuner_service import TunerService, TunerSettings
-from app.services import tuner_playback_service
 from app.services.tuner_playback_service import relay_ranked_streams, prefer_recovered_sources
 from app.services.ts_clock import watch_clock
 from app.services.tuner_remux import ffmpeg_binary
 from app.services.tuner_probe_service import tuner_probe_service
+from app.services import tuner_first_source, tuner_playback_service, waiting_card
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,12 @@ def _tuner_count() -> int:
 
 def _relay_client_factory(**kwargs) -> httpx.AsyncClient:
     return httpx.AsyncClient(**kwargs)
+
+
+def _client_address(request: Request) -> str:
+    """The device a tuner request comes from, as the fork sees it ('?' if
+    the server gives no peer). Clients behind the Docker gateway share it."""
+    return request.client.host if request.client else "?"
 
 
 def _validate_content_id(content_id: str) -> str:
@@ -259,7 +265,7 @@ async def tuner_stream(content_id: str, request: Request):
     # follows takes seconds, which is all the room a check-then-act cap needs
     # to be overshot. The relay adopts the claim and releases it when it ends.
     limit = await run_in_threadpool(_tuner_count)
-    peer = request.client.host if request.client else "?"
+    peer = _client_address(request)
     claim = relay_registry.try_open(content_id, f"tuner:{peer}", limit)
     if claim is None:
         raise APIError(
@@ -317,13 +323,23 @@ async def tuner_stream(content_id: str, request: Request):
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 
 
-def _refresh_while_playing() -> bool:
+def _setting_on(key: str) -> bool:
     db = SessionLocal()
     try:
-        value = SettingsRepository(db).get_setting("tuner_refresh_while_playing") or "true"
+        value = SettingsRepository(db).get_setting(key) or "true"
         return str(value).lower() not in ("false", "0", "no")
     finally:
         db.close()
+
+
+def _refresh_while_playing() -> bool:
+    return _setting_on("tuner_refresh_while_playing")
+
+
+def _switch_on_failure() -> bool:
+    # When the playing source stops sending, go on with another one in the
+    # same response instead of ending it. Óscar chose this on 2026-10-14.
+    return _setting_on("tuner_switch_on_failure")
 
 
 def _channel_candidates(tv_channel_id: int, *, include_offline: bool = False) -> List[str]:
@@ -342,17 +358,27 @@ def _channel_candidates(tv_channel_id: int, *, include_offline: bool = False) ->
     responses={200: {"content": {"video/mp2t": {"schema": {"type": "string", "format": "binary"}}}}})
 async def tuner_channel(tv_channel_id: int, request: Request):
     candidates = await run_in_threadpool(_channel_candidates, tv_channel_id)
+    # A person may have chosen the source this opening starts with (the Kodi
+    # skin's source list): see tuner_first_source.
+    opening = tuner_first_source.open_channel(_client_address(request), tv_channel_id)
+    candidates = opening.order(candidates)
     eligible = candidates or await run_in_threadpool(_channel_candidates, tv_channel_id, include_offline=True)
     if not eligible:
         raise APIError(code="NO_ONLINE_STREAMS", message="This channel has no active supported sources available", status_code=503)
     if request.method == "HEAD":
         return Response(status_code=200, headers=RELAY_HEADERS)
+    key = (_client_address(request), tv_channel_id)
+    if waiting_card.recently(key) == 'end':
+        # Kodi's second GET of a channel its first GET just found dead: the
+        # end card again, without trying the sources, taking a tuner slot
+        # someone zapping elsewhere may need, or opening the engine.
+        return ClosingStreamingResponse(
+            waiting_card.end_card_stream(await run_in_threadpool(waiting_card.load_end_card)),
+            headers=RELAY_HEADERS)
     limit = await run_in_threadpool(_tuner_count)
-    client = request.client.host if request.client else '?'
-    label = f"tuner:{client}"
+    label = f"tuner:{_client_address(request)}"
     # Kodi's second GET (or the same person back on this channel) goes on
     # from where the GET before it is instead of starting the sources again.
-    key = (client, tv_channel_id)
     shared, previous = tuner_playback_service.take_over_opening(key)
     resume_deadline, skip = None, set()
     if previous is not None:
@@ -371,8 +397,9 @@ async def tuner_channel(tv_channel_id: int, request: Request):
     refresh_while_playing = await run_in_threadpool(_refresh_while_playing)
     refresh = tuner_probe_service.start(tv_channel_id) if refresh_while_playing else None
 
-    async def refresh_failed_source(_content_id: str) -> None:
+    async def refresh_failed_source(content_id: str) -> None:
         nonlocal refresh
+        opening.source_failed(content_id)
         refresh = tuner_probe_service.start(tv_channel_id)
 
     async def monitor_alternatives() -> None:
@@ -384,7 +411,7 @@ async def tuner_channel(tv_channel_id: int, request: Request):
     monitor = asyncio.create_task(monitor_alternatives() if refresh_while_playing else asyncio.sleep(0))
 
     async def refreshed_candidates() -> tuple[List[str], bool]:
-        current = await run_in_threadpool(_channel_candidates, tv_channel_id)
+        current = opening.without_chosen(await run_in_threadpool(_channel_candidates, tv_channel_id))
         return current, refresh is not None and not refresh.done()
 
     iterator = None
@@ -399,23 +426,47 @@ async def tuner_channel(tv_channel_id: int, request: Request):
         except EngineUnavailableError:
             # HTTP sources are independent of the optional playback engine.
             engine = None
+        # With the waiting card Kodi opens the card before its 30 s limit, so
+        # the start may go on for as long as the card lasts and try more sources.
+        card_after = relay_settings.waiting_card_seconds
+        budget = relay_settings.startup_budget_seconds
+        if card_after > 0:
+            budget = max(budget, int(waiting_card.CARD_SECONDS) - 2)
         iterator = relay_ranked_streams(engine, candidates, label, claim, client_factory=_relay_client_factory,
                                       candidate_provider=refreshed_candidates, on_source_failure=refresh_failed_source,
                                       experimental_transcoding=experimental_transcoding,
                                       plex_compatible_audio=relay_settings.plex_compatible_audio,
                                       attempt_seconds=relay_settings.source_start_seconds,
-                                      startup_budget_seconds=relay_settings.startup_budget_seconds,
+                                      startup_budget_seconds=budget,
+                                      switch_midstream=await run_in_threadpool(_switch_on_failure),
                                       opening=shared, resume_deadline=resume_deadline, skip=skip,
                                       last_resort_provider=lambda: run_in_threadpool(
                                           _channel_candidates, tv_channel_id, include_offline=True),
                                       last_resort_now=previous is not None and previous.last_resort,
                                       tv_channel_id=tv_channel_id)
+        if card_after > 0:
+            # Also when the relay gives a playing source up and looks for
+            # another: the card instead of the last frame frozen on screen.
+            # Not before: a healthy low-bitrate source is silent for up to
+            # 16 s between pieces, and the card would cut in every time.
+            # And when no source is left, a few seconds of «Sin señal» and a
+            # clean end, instead of a 502 and Kodi's «Playback failed».
+            iterator = waiting_card.with_waiting_card(iterator, await run_in_threadpool(waiting_card.load_card),
+                                                      after=card_after,
+                                                      midstream_after=tuner_playback_service.STALL_SECONDS,
+                                                      key=key,
+                                                      end_card=await run_in_threadpool(waiting_card.load_end_card),
+                                                      end_errors=(EngineStreamError, EngineUnavailableError,
+                                                                  EngineRefusedError))
         first = await anext(iterator)
     except BaseException as exc:
+        opening.ended()
         tuner_playback_service.end_opening(key, shared)
         monitor.cancel()
         await asyncio.gather(monitor, return_exceptions=True)
-        tuner_probe_service.stop_channel(tv_channel_id)
+        if not shared.superseded:
+            # Otherwise the channel's refresh is feeding the newer GET's sources.
+            tuner_probe_service.stop_channel(tv_channel_id)
         if iterator is not None:
             await iterator.aclose()
         if engine is not None:
@@ -434,14 +485,49 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             yield first
             async for chunk in iterator:
                 yield chunk
+        except (EngineStreamError, EngineUnavailableError):
+            # No source left after playback had started (the midstream switch
+            # spent them all, with the waiting card off). Video already went
+            # out: end the response instead of breaking the transfer.
+            logger.info("TV relay ran out of sources after playback; ending tv_channel_id=%s", tv_channel_id)
         finally:
+            opening.ended()
             tuner_playback_service.end_opening(key, shared)
             monitor.cancel()
             await asyncio.gather(monitor, return_exceptions=True)
-            tuner_probe_service.stop_channel(tv_channel_id)
+            if not shared.superseded:
+                # Otherwise the channel's refresh is feeding the newer GET's sources.
+                tuner_probe_service.stop_channel(tv_channel_id)
             await iterator.aclose()
+            # The relay releases these itself, but only if it ever started:
+            # with the end card sent straight away it never does.
+            if any(info.id == claim.id for info in relay_registry.active()):
+                relay_registry.close(claim.id)
+                engine.close()
 
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
+
+
+# Device protocol for the Kodi skin, like the discovery routes: out of the
+# documented API.
+@hdhr_router.post("/channel/{tv_channel_id}/first-source", status_code=204, include_in_schema=False)
+def choose_first_source(tv_channel_id: int, payload: TunerFirstSourceRequest, request: Request,
+                        db: Session = Depends(get_db)) -> Response:
+    """The next opening of this channel from this device starts with
+    ``payload.source``; the skin then opens the channel through the PVR as
+    always. The rules are tuner_first_source's."""
+    if payload.source not in TunerService(db).stream_ids(tv_channel_id):
+        raise APIError(code="SOURCE_NOT_ON_CHANNEL", message="The source does not belong to this channel",
+                       status_code=404, context={"tv_channel_id": tv_channel_id})
+    tuner_first_source.choose_first_source(_client_address(request), tv_channel_id, payload.source)
+    return Response(status_code=204)
+
+
+@hdhr_router.delete("/channel/{tv_channel_id}/first-source", status_code=204, include_in_schema=False)
+def clear_first_source(tv_channel_id: int, request: Request) -> Response:
+    """«Automatic»: the next opening from this device uses the normal order."""
+    tuner_first_source.clear_choice(_client_address(request), tv_channel_id)
+    return Response(status_code=204)
 
 
 # --- operator API (/api/v1/tuner, token-gated) -------------------------------

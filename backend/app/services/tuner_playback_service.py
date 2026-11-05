@@ -70,13 +70,25 @@ def record_source_failure(content_id: str, cooldown: float = FAILURE_COOLDOWN_SE
             _failures.popitem(last=False)
 
 
+def _forget_old_failures() -> None:
+    now = time.monotonic()
+    for cid, failed_at in list(_failures.items()):
+        if now - failed_at >= FAILURE_COOLDOWN_SECONDS:
+            del _failures[cid]
+
+
 def prefer_recovered_sources(content_ids: list[str]) -> list[str]:
     with _failure_lock:
-        now = time.monotonic()
-        for cid, failed_at in list(_failures.items()):
-            if now - failed_at >= FAILURE_COOLDOWN_SECONDS:
-                del _failures[cid]
+        _forget_old_failures()
         return sorted(content_ids, key=lambda cid: (cid in _failures, _failures.get(cid, 0)))
+
+
+def failed_recently(content_id: str) -> bool:
+    """Whether the relay saw this source fail in the last
+    FAILURE_COOLDOWN_SECONDS."""
+    with _failure_lock:
+        _forget_old_failures()
+        return content_id in _failures
 
 
 # How each attempt at a source ended, for per-source statistics. Outcomes:
@@ -197,6 +209,7 @@ async def relay_ranked_streams(
     on_source_failure: Callable[[str], Awaitable[None]] | None = None,
     attempt_seconds: float | None = None,
     startup_budget_seconds: float | None = None,
+    switch_midstream: bool = False,
     opening: ChannelOpening | None = None,
     resume_deadline: float | None = None,
     skip: Collection[str] = (),
@@ -327,6 +340,9 @@ async def relay_ranked_streams(
                     with anyio.fail_after(max(0, attempt_deadline - time.monotonic())) as timer[0]:
                         first = await anext(iterator)
                     first_at = last_at = time.monotonic()
+                    # Bytes of the source itself (the waiting card wraps this
+                    # iterator from outside): from here on the source plays.
+                    registry.source_playing(claim.id)
                     if opening is not None:
                         opening.current_deadline = None
                     yield first
@@ -396,10 +412,17 @@ async def relay_ranked_streams(
                     deadline = time.monotonic() + startup_budget_seconds
                 if on_source_failure is not None:
                     await on_source_failure(content_id)
-                if first_at is not None and not experimental_transcoding:
+                if first_at is not None and not experimental_transcoding and not switch_midstream:
                     # Headers and media have already been sent. End this response so
                     # the client reconnects to the same stable TV URL for a new source.
                     return
+                if first_at is not None and switch_midstream:
+                    # Carry on with the next source in the SAME response: Kodi does
+                    # not reconnect, it goes back to its menu. Measured on the box,
+                    # Kodi follows a raw switch to another source (new PIDs, other
+                    # resolution) as a stream change. It waits up to 60 s for data
+                    # (curllowspeedtime), so a fresh startup budget fits.
+                    deadline = time.monotonic() + startup_budget_seconds
                 # Always use current eligibility after a failure, not the startup snapshot.
                 if candidate_provider is not None:
                     with anyio.move_on_after(max(0, deadline - time.monotonic())) as scope:

@@ -386,3 +386,26 @@ def test_one_report_does_not_hide_a_source_and_two_do(db_session):
     _attempts(db_session, 'a', 'bad_audio', 1, seconds=2100)
     db_session.commit()
     assert 'Example Sports' not in _playlist(db_session, hide_unusable=True)
+
+
+def test_a_clock_that_starts_ahead_hides_nothing_until_the_lists_are_read(db_session):
+    from app.services.stream_history import unusable_ids
+    tv = _channel(db_session)
+    _stream(db_session, 'a', tv)
+    _stream(db_session, 'b', tv, last_seen=datetime.now(timezone.utc) - timedelta(days=3))
+    db_session.commit()
+    streams = db_session.query(AcestreamChannel).all()
+    assert unusable_ids(db_session, streams, now=datetime.now(timezone.utc) + timedelta(days=45)) == set()
+
+
+def test_a_box_left_off_for_weeks_hides_only_what_the_last_reading_had_already_lost(db_session):
+    gone = TVChannel(name='Stale Channel', is_active=True)
+    kept = TVChannel(name='Live Channel', is_active=True)
+    db_session.add_all([gone, kept])
+    db_session.flush()
+    last_reading = datetime.now(timezone.utc) - timedelta(days=21)
+    _stream(db_session, 'a', gone, last_seen=last_reading - timedelta(days=20))
+    _stream(db_session, 'c', kept, last_seen=last_reading)
+    db_session.commit()
+    body = _playlist(db_session, hide_unusable=True)
+    assert 'Live Channel' in body and 'Stale Channel' not in body

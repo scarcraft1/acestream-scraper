@@ -66,6 +66,9 @@ still in the database, so it comes back as soon as a list publishes it again.
 A playlist URL can override the setting with `hide_unusable=true|false`.
 One `bad_audio` report only demotes a source; it counts towards hiding from
 two reports within the history window on.
+The 14 days count back from the latest list reading (the newest `last_seen`
+of any active source), not from the clock, so a clock that starts ahead or a
+server left off for weeks hides nothing until the lists are read again.
 
 ## Limits
 

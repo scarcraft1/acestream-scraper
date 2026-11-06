@@ -317,24 +317,23 @@ async def tuner_stream(content_id: str, request: Request):
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 
 
-def _refresh_while_playing() -> bool:
+def _setting_on(key: str) -> bool:
     db = SessionLocal()
     try:
-        value = SettingsRepository(db).get_setting("tuner_refresh_while_playing") or "true"
+        value = SettingsRepository(db).get_setting(key) or "true"
         return str(value).lower() not in ("false", "0", "no")
     finally:
         db.close()
+
+
+def _refresh_while_playing() -> bool:
+    return _setting_on("tuner_refresh_while_playing")
 
 
 def _switch_on_failure() -> bool:
     # When the playing source stops sending, go on with another one in the
-    # same response instead of ending it. Off unless the setting turns it on.
-    db = SessionLocal()
-    try:
-        value = SettingsRepository(db).get_setting("tuner_switch_on_failure") or "false"
-        return str(value).lower() not in ("false", "0", "no")
-    finally:
-        db.close()
+    # same response instead of ending it. Óscar chose this on 2026-10-14.
+    return _setting_on("tuner_switch_on_failure")
 
 
 def _channel_candidates(tv_channel_id: int, *, include_offline: bool = False) -> List[str]:

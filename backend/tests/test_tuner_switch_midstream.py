@@ -78,7 +78,8 @@ async def test_the_channel_response_ends_cleanly_when_every_source_is_spent(monk
     monkeypatch.setattr(tuner, '_tuner_count', lambda: 1)
     monkeypatch.setattr(tuner, '_engine', Mock)
     monkeypatch.setattr(tuner, '_relay_settings', lambda: SimpleNamespace(
-        experimental_transcoding=False, plex_compatible_audio=False, source_start_seconds=1, startup_budget_seconds=2))
+        experimental_transcoding=False, plex_compatible_audio=False, source_start_seconds=1, startup_budget_seconds=2,
+        waiting_card_seconds=0))
     monkeypatch.setattr(tuner, '_switch_on_failure', lambda: True)
     monkeypatch.setattr(tuner.tuner_probe_service, 'start', Mock(return_value=None))
     monkeypatch.setattr(tuner.tuner_probe_service, 'stop_channel', stopped.append)

@@ -5219,6 +5219,8 @@ export interface components {
             kind: "browser" | "relay";
             /** Peers */
             peers?: number | null;
+            /** Source State */
+            source_state?: ("probing" | "playing") | null;
             /** Started At */
             started_at?: string | null;
             /**
@@ -9969,17 +9971,23 @@ export interface components {
             /**
              * Source Start Seconds
              * @description Seconds a source gets to deliver its first byte before the next is tried
-             * @default 15
+             * @default 20
              */
             source_start_seconds?: number;
             /**
              * Startup Budget Seconds
-             * @description Seconds for the whole start across sources; keep it under the player's own timeout (Kodi gives up after about 30)
-             * @default 45
+             * @description Seconds for the whole start across sources; keep it under the player's limit (Kodi gives up after 30)
+             * @default 28
              */
             startup_budget_seconds?: number;
             /** Tuner Count */
             tuner_count: number;
+            /**
+             * Waiting Card Seconds
+             * @description Seconds without video before a «Conectando…» card is sent while more sources are tried; 0 = never
+             * @default 20
+             */
+            waiting_card_seconds?: number;
         };
         /** TunerSettingsUpdate */
         TunerSettingsUpdate: {
@@ -10001,6 +10009,8 @@ export interface components {
             startup_budget_seconds?: number | null;
             /** Tuner Count */
             tuner_count?: number | null;
+            /** Waiting Card Seconds */
+            waiting_card_seconds?: number | null;
         };
         /** TunerStatusResponse */
         TunerStatusResponse: {

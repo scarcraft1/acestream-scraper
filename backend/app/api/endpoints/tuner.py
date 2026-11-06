@@ -369,7 +369,7 @@ def _refresh_while_playing() -> bool:
 
 def _switch_on_failure() -> bool:
     # When the playing source stops sending, go on with another one in the
-    # same response instead of ending it. Óscar chose this on 2026-10-14.
+    # same response instead of ending it. Chosen on 2026-10-14 for the box.
     return _setting_on("tuner_switch_on_failure")
 
 
@@ -534,7 +534,9 @@ async def tuner_channel(tv_channel_id: int, request: Request):
             # with the end card sent straight away it never does.
             if any(info.id == claim.id for info in relay_registry.active()):
                 relay_registry.close(claim.id)
-                engine.close()
+                if engine is not None:
+                    # None when the engine is unavailable and only HTTP sources play.
+                    engine.close()
 
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 
@@ -561,12 +563,12 @@ def clear_first_source(tv_channel_id: int, request: Request) -> Response:
     return Response(status_code=204)
 
 
-# --- operator API (/api/v1/tuner, token-gated) -------------------------------
+# Device protocol, like the routes above: out of the documented API.
 @hdhr_router.post('/report', include_in_schema=False)
 async def tuner_report(request: Request, problem: str = Query(...)):
     """The viewer reports the source they are watching now (the Kodi add-on's
-    menu): its viewing is recorded as ``problem`` and the source goes after the
-    others next time. 404 when this client is watching nothing."""
+    menu): its viewing is recorded as ``problem``, which counts against the
+    source when sources are ranked next time. 404 when this client is watching nothing."""
     if problem not in REPORTED_OUTCOMES:
         raise HTTPException(400, 'Unknown problem')
     content_id = relay_registry.report(f"tuner:{_client_address(request)}", problem)
@@ -576,6 +578,7 @@ async def tuner_report(request: Request, problem: str = Query(...)):
     return {'content_id': content_id, 'problem': problem}
 
 
+# --- operator API (/api/v1/tuner, token-gated) -------------------------------
 @router.get("/settings", response_model=TunerSettingsResponse, summary="Tuner settings")
 def get_tuner_settings(db: Session = Depends(get_db)) -> TunerSettingsResponse:
     return TunerSettingsResponse(**asdict(TunerService(db).settings()))

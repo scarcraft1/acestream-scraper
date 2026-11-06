@@ -105,6 +105,10 @@ def test_streaming_route_uses_freshness_and_releases_claim(
         ("b", False, NOW - timedelta(hours=1 if all_recent_offline else 12), 100),
         ("c", False, NOW - timedelta(minutes=1), 1000),
     ])
+    # Without the fork's switch to another source mid-response: with it, a
+    # channel whose source ends goes on with the next one (here the last resort).
+    from app.repositories.settings_repository import SettingsRepository
+    SettingsRepository(alembic_db_session).set_setting("tuner_switch_on_failure", "false")
     attempts, cleaned = [], []
     engine = Mock()
     engine_factory = Mock(return_value=engine)

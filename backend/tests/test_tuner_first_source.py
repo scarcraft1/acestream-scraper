@@ -35,8 +35,8 @@ def channel(channel_failing, alembic_client, alembic_db_session, monkeypatch):
     get_settings.cache_clear(); get_tuner_gate.cache_clear()
     monkeypatch.setattr(tuner_first_source, '_choices', {})
     monkeypatch.setattr('app.services.tuner_playback_service._failures', OrderedDict())
-    tv = TVChannel(name='DAZN 1', is_active=True)
-    other = TVChannel(name='DAZN 2', is_active=True)
+    tv = TVChannel(name='Deportes Uno', is_active=True)
+    other = TVChannel(name='Deportes Dos', is_active=True)
     alembic_db_session.add_all([tv, other]); alembic_db_session.flush()
     alembic_db_session.add_all([
         AcestreamChannel(id='a' * 40, name='online', tv_channel_id=tv.id, is_active=True, is_online=True),

@@ -1,7 +1,7 @@
 """When the playing source stops mid-broadcast, the relay goes on with the next one.
 
 Ending the response so the client reconnects does not work with Kodi: it goes
-back to its menu. On a small ARM box M+ LaLiga played its first seconds and
+back to its menu. On a small ARM box one channel played its first seconds and
 stopped for good. With tuner_switch_on_failure (on by default) the relay goes on
 with the next source in the same response; Kodi follows a raw switch to another
 source as a stream change (measured 720p->720p and 720p->1080p).

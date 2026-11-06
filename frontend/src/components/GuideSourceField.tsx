@@ -9,7 +9,7 @@ interface GuideSourceFieldProps {
 
 /**
  * The guide source a TV channel's EPG ID is looked up in. Two sources can
- * use different ids for the same channel (TDP.TV, Teledeporte), so the id
+ * use different ids for the same channel (TDP.TV, Canal Deportes), so the id
  * alone does not say which guide is meant.
  */
 const GuideSourceField: React.FC<GuideSourceFieldProps> = ({ value, onChange }) => {

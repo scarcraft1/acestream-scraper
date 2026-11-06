@@ -15,9 +15,9 @@ from app.services.tuner_service import supported_tuner_stream
 logger = logging.getLogger(__name__)
 
 
-# What a refresh checks while a channel plays (Óscar, 20-10). It used to check
+# What a refresh checks while a channel plays (20-10). It used to check
 # every source of the channel, one after another, restarted every 60 s and
-# skipping only those checked in the last 30 s: on the bench, DAZN F1 had 39
+# skipping only those checked in the last 30 s: on the bench, one channel had 39
 # sources checked in 120 s of viewing, with a second engine session open
 # almost all the time and half as much CPU again (33 % of a core against 23 %
 # without it). On the box, an A55, the audio of the playing source stalled 24 s

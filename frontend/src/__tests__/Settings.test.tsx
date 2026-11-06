@@ -132,7 +132,7 @@ describe('Settings page', () => {
 
   it('saves the stream check timeout, which only existed in the database', async () => {
     // A slow engine starts some streams in 15-20 s; with 10 s they were
-    // marked offline. Óscar wants it in the interface.
+    // marked offline. It is wanted in the interface.
     const mutate = succeedingMutate();
     (configHooks.useUpdateAcestreamCheckTimeout as jest.Mock).mockReturnValue({ mutate, isPending: false });
     renderPage('automation');

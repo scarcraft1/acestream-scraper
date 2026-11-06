@@ -590,8 +590,9 @@ describe('Integration pages', () => {
     const perSource = within(section).getByRole('spinbutton', { name: 'Seconds per source' });
     const total = within(section).getByRole('spinbutton', { name: 'Seconds to start a channel' });
     const save = within(section).getByRole('button', { name: 'Save tuner settings' });
-    expect(perSource).toHaveValue(15);
-    expect(total).toHaveValue(45);
+    // The fork's defaults: 20 s per source, 28 s in all (Kodi gives up at 30 s).
+    expect(perSource).toHaveValue(20);
+    expect(total).toHaveValue(28);
 
     fireEvent.change(perSource, { target: { value: '200' } });
     expect(within(section).getByText('Enter a whole number between 5 and 180.')).toBeInTheDocument();
@@ -619,7 +620,7 @@ describe('Integration pages', () => {
   });
 
   it('sets when the waiting card appears, or turns it off', async () => {
-    // Óscar: as rarely as possible. 20 s by default: only once the first
+    // As rarely as possible. 20 s by default: only once the first
     // source has had its time; Kodi gives up at 30 s.
     renderPage('media-servers');
     const section = screen.getByRole('region', { name: 'Media servers' });

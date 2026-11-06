@@ -86,9 +86,9 @@ class TunerSettings:
     hide_unusable: bool = False
     experimental_transcoding: bool = False
     # Seconds a source gets to deliver its first byte, and for the whole start
-    # across sources: a cold P2P start can take longer than the defaults.
-    source_start_seconds: int = 15
-    startup_budget_seconds: int = 45
+    # across sources. Settings because a slow box needs more than the bank.
+    source_start_seconds: int = 20
+    startup_budget_seconds: int = 28
     # Seconds without a byte before the waiting card is sent; 0 = never.
     waiting_card_seconds: int = 20
 

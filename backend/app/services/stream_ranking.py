@@ -55,8 +55,8 @@ def checked_since(stream, since: datetime, until: datetime) -> bool:
     return since <= checked <= until
 
 
-# Castilian first (Óscar, 20-10: in the test Eurosport 1 came out in Russian
-# and DAZN F1 in German, with Spanish sources online on the same channel).
+# Castilian first (20-10: in the test one channel came out in Russian
+# and another in German, with Spanish sources online on the same channel).
 # Evidence of Castilian: a first audio track tagged Spanish, or a name tag such
 # as [ES], (ES), "ES |", Spain, España, castellano. Another language: a country
 # tag other than ES ([DE], "UK |", "FR ·"...), audio tracks that are all of
@@ -114,7 +114,7 @@ def relay_order(streams: Iterable, history: Mapping, now: datetime) -> List[str]
     demoted source after every group, never dropped. A source found offline
     recently is left out.
 
-    Within a group the language decides before freshness (Óscar, 20-10: on
+    Within a group the language decides before freshness (20-10: on
     one channel the only source checked that day was in another language and
     an unmarked one had been online the day before; if that one is gone, the
     relay moves on after one attempt): an official HTTP source first (it opens

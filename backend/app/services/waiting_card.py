@@ -5,10 +5,10 @@ arrive later, so the relay's whole start had to fit in 28 s: two sources at
 most. When nothing has arrived after `after` seconds, this sends the card
 instead -- Kodi opens it -- and the relay goes on trying sources; the first
 real byte is spliced in raw. Measured on the laptop and on the box (Amlogic,
-seen by Óscar, 14-10): Kodi follows the splice to 720p and 1080p, as long as
+seen on 14-10): Kodi follows the splice to 720p and 1080p, as long as
 both the card and the channel carry audio; the card carries AAC silence.
 
-Óscar, 14-10: black with «Conectando…» rather than another channel's
+14-10: black with «Conectando…» rather than another channel's
 content, and «reduce it as much as possible»: it only appears after the
 threshold, never on a channel that starts in time.
 
@@ -107,7 +107,7 @@ async def with_waiting_card(inner: AsyncIterator[bytes], card: bytes, *, after: 
 
     Before the first chunk the card comes after `after` seconds. Once video
     has flowed, after `midstream_after` seconds of silence (None: never):
-    measured on the box (kodi-0c, 15-10), M+ LaLiga stopped 4 s in and the
+    measured on the box (kodi-0c, 15-10), one channel stopped 4 s in and the
     relay spent over a minute finding another source, with Kodi showing the
     last frame. Each silence starts the card from the beginning, and the
     next real chunk -- the same source back, or the next one -- is spliced

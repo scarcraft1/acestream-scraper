@@ -25,7 +25,7 @@ def test_a_cold_stale_source_still_opens_the_channel(alembic_client, alembic_db_
     monkeypatch.setenv('TUNER_ALLOWED_NETWORKS', '*')
     get_settings.cache_clear(); get_tuner_gate.cache_clear()
     try:
-        tv = TVChannel(name='M+ LaLiga', is_active=True)
+        tv = TVChannel(name='Fútbol Plus', is_active=True)
         alembic_db_session.add(tv)
         alembic_db_session.flush()
         days_ago = datetime.now(timezone.utc) - timedelta(days=3)

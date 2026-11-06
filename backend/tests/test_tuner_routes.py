@@ -301,3 +301,31 @@ async def test_individual_source_going_silent_ends_the_stream_as_a_stall(monkeyp
     assert len(chunks) == 1
     assert recorded == [(IH, 'stall')]
     assert engine.closed
+
+
+def test_channel_without_engine_ends_cleanly_when_its_relay_never_registered(alembic_client, alembic_db_session, open_gate, monkeypatch):
+    """HTTP-only playback runs with no engine (`engine` stays None). When the
+    relay ends without ever releasing the reserved claim, the route releases it
+    itself, and must not try to close an engine it never had."""
+    from unittest.mock import Mock
+    from app.api.endpoints import tuner
+    from app.services.engine_client import EngineUnavailableError
+    tv = _seed(alembic_db_session)
+    packet = b'\x47' + bytes(187)
+
+    def no_engine():
+        raise EngineUnavailableError("Acestream engine is not configured")
+
+    async def ranked(engine, content_ids, label, claim, **kwargs):
+        assert engine is None
+        yield packet
+
+    monkeypatch.setattr(tuner, '_engine', no_engine)
+    monkeypatch.setattr(tuner, '_setting_on', lambda key: False)
+    monkeypatch.setattr(tuner.tuner_probe_service, 'start', Mock())
+    monkeypatch.setattr(tuner, 'relay_ranked_streams', ranked)
+
+    response = alembic_client.get(f"/tuner/channel/{tv.id}.ts")
+
+    assert response.status_code == 200 and response.content == packet
+    assert tuner.relay_registry.active() == []

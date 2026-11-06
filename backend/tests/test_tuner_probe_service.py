@@ -73,7 +73,7 @@ def test_refresh_checks_an_http_source_in_the_relay_order(alembic_db_session, mo
 
 
 def test_refresh_looks_at_the_next_three_only_and_then_rests(alembic_db_session, monkeypatch):
-    """On the bench a 120 s view of DAZN F1 checked 39 sources (20-10). Now
+    """On the bench a 120 s view of one channel checked 39 sources (20-10). Now
     the first pass checks the stale ones among the next three, and once
     they are fresh a pass checks nothing instead of walking down the list."""
     rows = [('a', True, True, 5)]                                   # checked 5 min ago: left alone

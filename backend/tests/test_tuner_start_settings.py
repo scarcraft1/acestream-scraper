@@ -1,7 +1,7 @@
 """How long the relay waits for an acestream to start: a setting, not a constant.
 
-A source gets ATTEMPT_SECONDS (15) to deliver its first byte and a channel
-STARTUP_BUDGET_SECONDS (45) across its sources. A cold P2P start can take
+A source gets ATTEMPT_SECONDS (15, 20 in this fork) to deliver its first byte and a channel
+STARTUP_BUDGET_SECONDS (45, 28 in this fork) across its sources. A cold P2P start can take
 longer (20-50 s in #226): those channels fail on the first press and play on
 the retry, with the engine warmed. The two are
 now tuner settings, defaulting to the old constants, so nothing changes until
@@ -23,7 +23,7 @@ def clean_failures(monkeypatch):
 
 def test_defaults_are_the_previous_constants(db_session):
     settings = TunerService(db_session).settings()
-    assert (settings.source_start_seconds, settings.startup_budget_seconds) == (15, 45)
+    assert (settings.source_start_seconds, settings.startup_budget_seconds) == (20, 28)
 
 
 def test_saved_and_clamped(db_session):
@@ -35,7 +35,7 @@ def test_saved_and_clamped(db_session):
 
 
 def test_the_api_shows_and_changes_them(client):
-    assert client.get('/api/v1/tuner/settings').json()['source_start_seconds'] == 15
+    assert client.get('/api/v1/tuner/settings').json()['source_start_seconds'] == 20
     response = client.put('/api/v1/tuner/settings', json={'source_start_seconds': 35, 'startup_budget_seconds': 50})
     assert response.status_code == 200
     assert (response.json()['source_start_seconds'], response.json()['startup_budget_seconds']) == (35, 50)

@@ -738,22 +738,6 @@ def _isolated_access_storage(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _relay_memory_left_clean():
-    """The relay's process-wide memory does not reach the next test.
-
-    An early death keeps a source behind the others for 30 minutes, which
-    turns a later test's source order round; an opening left over is resumed
-    by a later GET of the same client and channel; a test that runs the app
-    leaves the outcome recorder writing to its database.
-    """
-    yield
-    from app.services import tuner_playback_service
-    tuner_playback_service._failures.clear()
-    tuner_playback_service._openings.clear()
-    tuner_playback_service.set_outcome_recorder(None)
-
-
-@pytest.fixture(autouse=True)
 def _relay_registry_left_clean():
     """Every test leaves the relay registry as it found it.
 
@@ -774,3 +758,41 @@ def _relay_registry_left_clean():
     if left:
         pytest.fail("test left %d relay claim(s) open: %s" % (
             len(left), ", ".join(f"{i.content_id[:12] or '-'} ({i.client_label})" for i in left)))
+
+
+@pytest.fixture(autouse=True)
+def _process_state_left_clean():
+    """Every test leaves the process-wide scheduler and engine state as it was.
+
+    task_service.shutdown_event: any test that runs the app's lifespan sets it
+    on the way out (five in the suite, legitimately), and a later status-pass
+    test then stopped before checking anything -- red only in the full suite
+    (2026-10-15). It is cleared after every test.
+
+    A deferred engine stop (EngineClient.stop with linger_seconds) still
+    pending would fire into whatever test runs next: that one is a bug in the
+    test, so it is cancelled and the test fails, naming it.
+    """
+    from app.services import playback_ownership
+    from app.services.task_service import task_service
+    yield
+    task_service.shutdown_event.clear()
+    # What each client's last GET did, kept 5 s for Kodi's second GET: left
+    # over, it gives the next test's channel its card at once.
+    from app.services import waiting_card
+    waiting_card._recent.clear()
+    # The relay's failure memory and openings: an early death keeps a source
+    # behind for 30 minutes, which turned a later test's source order round.
+    from app.services import tuner_playback_service
+    tuner_playback_service._failures.clear()
+    tuner_playback_service._openings.clear()
+    # Set by the app's lifespan when a test runs it: left over, later tests'
+    # relays would write their outcomes to the statistics.
+    tuner_playback_service.set_outcome_recorder(None)
+    pending = [source for source in list(playback_ownership._sources.values())
+               if source.pending_stop is not None and source.pending_stop.is_alive()]
+    for source in pending:
+        source.pending_stop.cancel()
+        source.pending_stop = None
+    if pending:
+        pytest.fail("test left %d deferred engine stop(s) pending" % len(pending))

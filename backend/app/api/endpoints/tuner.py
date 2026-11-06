@@ -40,7 +40,7 @@ from app.services.tuner_playback_service import (
 from app.services.ts_clock import ClockWatch, watch_clock
 from app.services.tuner_remux import ffmpeg_binary
 from app.services.tuner_probe_service import tuner_probe_service
-from app.services import tuner_first_source, tuner_playback_service
+from app.services import tuner_first_source, tuner_playback_service, waiting_card
 
 logger = logging.getLogger(__name__)
 
@@ -394,6 +394,13 @@ async def tuner_channel(tv_channel_id: int, request: Request):
     if request.method == "HEAD":
         return Response(status_code=200, headers=RELAY_HEADERS)
     key = (_client_address(request), tv_channel_id)
+    if waiting_card.recently(key) == 'end':
+        # Kodi's second GET of a channel its first GET just found dead: the
+        # end card again, without trying the sources, taking a tuner slot
+        # someone zapping elsewhere may need, or opening the engine.
+        return ClosingStreamingResponse(
+            waiting_card.end_card_stream(await run_in_threadpool(waiting_card.load_end_card)),
+            headers=RELAY_HEADERS)
     limit = await run_in_threadpool(_tuner_count)
     label = f"tuner:{_client_address(request)}"
     # Kodi's second GET (or the same person back on this channel) goes on
@@ -445,25 +452,47 @@ async def tuner_channel(tv_channel_id: int, request: Request):
         except EngineUnavailableError:
             # HTTP sources are independent of the optional playback engine.
             engine = None
+        # With the waiting card Kodi opens the card before its 30 s limit, so
+        # the start may go on for as long as the card lasts and try more sources.
+        card_after = relay_settings.waiting_card_seconds
+        budget = relay_settings.startup_budget_seconds
+        if card_after > 0:
+            budget = max(budget, int(waiting_card.CARD_SECONDS) - 2)
         iterator = relay_ranked_streams(engine, candidates, label, claim, client_factory=_relay_client_factory,
                                       candidate_provider=refreshed_candidates, on_source_failure=refresh_failed_source,
                                       experimental_transcoding=experimental_transcoding,
                                       plex_compatible_audio=relay_settings.plex_compatible_audio,
                                       attempt_seconds=relay_settings.source_start_seconds,
-                                      startup_budget_seconds=relay_settings.startup_budget_seconds,
+                                      startup_budget_seconds=budget,
                                       switch_midstream=await run_in_threadpool(_switch_on_failure),
                                       opening=shared, resume_deadline=resume_deadline, skip=skip,
                                       last_resort_provider=lambda: run_in_threadpool(
                                           _channel_candidates, tv_channel_id, include_offline=True),
                                       last_resort_now=previous is not None and previous.last_resort,
                                       tv_channel_id=tv_channel_id)
+        if card_after > 0:
+            # Also when the relay gives a playing source up and looks for
+            # another: the card instead of the last frame frozen on screen.
+            # Not before: a healthy low-bitrate source is silent for up to
+            # 16 s between pieces, and the card would cut in every time.
+            # And when no source is left, a few seconds of «Sin señal» and a
+            # clean end, instead of a 502 and Kodi's «Playback failed».
+            iterator = waiting_card.with_waiting_card(iterator, await run_in_threadpool(waiting_card.load_card),
+                                                      after=card_after,
+                                                      midstream_after=tuner_playback_service.STALL_SECONDS,
+                                                      key=key,
+                                                      end_card=await run_in_threadpool(waiting_card.load_end_card),
+                                                      end_errors=(EngineStreamError, EngineUnavailableError,
+                                                                  EngineRefusedError))
         first = await anext(iterator)
     except BaseException as exc:
         opening.ended()
         tuner_playback_service.end_opening(key, shared)
         monitor.cancel()
         await asyncio.gather(monitor, return_exceptions=True)
-        tuner_probe_service.stop_channel(tv_channel_id)
+        if not shared.superseded:
+            # Otherwise the channel's refresh is feeding the newer GET's sources.
+            tuner_probe_service.stop_channel(tv_channel_id)
         if iterator is not None:
             await iterator.aclose()
         if engine is not None:
@@ -484,16 +513,23 @@ async def tuner_channel(tv_channel_id: int, request: Request):
                 yield chunk
         except (EngineStreamError, EngineUnavailableError):
             # No source left after playback had started (the midstream switch
-            # spent them all). Video already went out: end the response
-            # instead of breaking the transfer.
+            # spent them all, with the waiting card off). Video already went
+            # out: end the response instead of breaking the transfer.
             logger.info("TV relay ran out of sources after playback; ending tv_channel_id=%s", tv_channel_id)
         finally:
             opening.ended()
             tuner_playback_service.end_opening(key, shared)
             monitor.cancel()
             await asyncio.gather(monitor, return_exceptions=True)
-            tuner_probe_service.stop_channel(tv_channel_id)
+            if not shared.superseded:
+                # Otherwise the channel's refresh is feeding the newer GET's sources.
+                tuner_probe_service.stop_channel(tv_channel_id)
             await iterator.aclose()
+            # The relay releases these itself, but only if it ever started:
+            # with the end card sent straight away it never does.
+            if any(info.id == claim.id for info in relay_registry.active()):
+                relay_registry.close(claim.id)
+                engine.close()
 
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 

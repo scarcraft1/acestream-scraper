@@ -26,6 +26,9 @@ _LOOKUP = [0xA, 0x5, 0xF, 0x6, 0x7, 0xC, 0x1, 0xB, 0x9, 0x2, 0x8, 0xD, 0x4, 0x3,
 
 logger = logging.getLogger(__name__)
 
+# Past 28 s Kodi has already given up (it waits 30 s for the video).
+MAX_WAITING_CARD_SECONDS = 28
+
 MIN_TUNER_COUNT, MAX_TUNER_COUNT = 1, 16
 MIN_MAX_CHANNELS, MAX_MAX_CHANNELS = 1, 1000
 MIN_START_SECONDS, MAX_START_SECONDS = 5, 180
@@ -86,6 +89,8 @@ class TunerSettings:
     # across sources: a cold P2P start can take longer than the defaults.
     source_start_seconds: int = 15
     startup_budget_seconds: int = 45
+    # Seconds without a byte before the waiting card is sent; 0 = never.
+    waiting_card_seconds: int = 20
 
 
 @dataclass
@@ -149,11 +154,13 @@ class TunerService:
             hide_unusable=str(repo.get_setting(SettingsRepository.TUNER_HIDE_UNUSABLE) or "false").lower() in ("true", "1"),
             source_start_seconds=int(repo.get_setting(SettingsRepository.TUNER_SOURCE_START_SECONDS) or SettingsRepository.DEFAULT_TUNER_SOURCE_START_SECONDS),
             startup_budget_seconds=int(repo.get_setting(SettingsRepository.TUNER_STARTUP_BUDGET_SECONDS) or SettingsRepository.DEFAULT_TUNER_STARTUP_BUDGET_SECONDS),
+            waiting_card_seconds=int(repo.get_setting(SettingsRepository.TUNER_WAITING_CARD_SECONDS) or SettingsRepository.DEFAULT_TUNER_WAITING_CARD_SECONDS),
         )
 
     def update_settings(self, *, friendly_name: Optional[str] = None, tuner_count: Optional[int] = None,
                         max_channels: Optional[int] = None, only_online: Optional[bool] = None, hide_unusable: Optional[bool] = None, plex_compatible_audio: Optional[bool] = None, experimental_transcoding: Optional[bool] = None,
-                        source_start_seconds: Optional[int] = None, startup_budget_seconds: Optional[int] = None) -> TunerSettings:
+                        source_start_seconds: Optional[int] = None, startup_budget_seconds: Optional[int] = None,
+                        waiting_card_seconds: Optional[int] = None) -> TunerSettings:
         repo = self.settings_repo
         if friendly_name is not None:
             repo.set_setting(SettingsRepository.TUNER_FRIENDLY_NAME, friendly_name.strip() or SettingsRepository.DEFAULT_TUNER_FRIENDLY_NAME, "Tuner name shown in Jellyfin/Plex")
@@ -173,6 +180,8 @@ class TunerService:
             repo.set_setting(SettingsRepository.TUNER_SOURCE_START_SECONDS, str(max(MIN_START_SECONDS, min(MAX_START_SECONDS, int(source_start_seconds)))), "Seconds a source gets to deliver its first byte")
         if startup_budget_seconds is not None:
             repo.set_setting(SettingsRepository.TUNER_STARTUP_BUDGET_SECONDS, str(max(MIN_START_SECONDS, min(MAX_START_SECONDS, int(startup_budget_seconds)))), "Seconds for the whole start across sources")
+        if waiting_card_seconds is not None:
+            repo.set_setting(SettingsRepository.TUNER_WAITING_CARD_SECONDS, str(max(0, min(MAX_WAITING_CARD_SECONDS, int(waiting_card_seconds)))), "Seconds without video before the waiting card; 0 = never")
         return self.settings()
 
     def device_id(self) -> str:

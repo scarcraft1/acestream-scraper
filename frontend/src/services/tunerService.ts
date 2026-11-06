@@ -13,6 +13,8 @@ export interface TunerSettings {
   startup_budget_seconds?: number;
   /** Seconds without video before the «Conectando…» card; 0 = never. */
   waiting_card_seconds?: number;
+  /** Leave out sources and channels with no useful prospect (off by default). */
+  hide_unusable?: boolean;
 }
 
 export type TunerSettingsUpdate = Partial<TunerSettings>;

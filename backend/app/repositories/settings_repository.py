@@ -56,8 +56,12 @@ class SettingsRepository:
     DEFAULT_TUNER_MAX_CHANNELS = '450'
     DEFAULT_TUNER_ONLY_ONLINE = 'false'
     # The relay's previous constants: a slow P2P host can raise them (#226).
-    DEFAULT_TUNER_SOURCE_START_SECONDS = '15'
-    DEFAULT_TUNER_STARTUP_BUDGET_SECONDS = '45'
+    # Fork defaults (the box keeps no tuner settings, so these are what it
+    # runs). A cold acestream start took 17.4 s on an A55, and Kodi gives up
+    # opening a channel 30 s after creating its demuxer: 20 s lets a slow
+    # source start, 28 s leaves room for another after one that fails fast.
+    DEFAULT_TUNER_SOURCE_START_SECONDS = '20'
+    DEFAULT_TUNER_STARTUP_BUDGET_SECONDS = '28'
     # The waiting card (services/waiting_card.py) only after the first source
     # had its 20 s: Óscar wants it as rarely as possible. 0 turns it off.
     DEFAULT_TUNER_WAITING_CARD_SECONDS = '20'

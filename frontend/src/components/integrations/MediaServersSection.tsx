@@ -287,8 +287,8 @@ const toForm = (settings: TunerSettings): TunerFormState => ({
   hide_unusable: settings.hide_unusable ?? false,
   plex_compatible_audio: settings.plex_compatible_audio ?? false,
   experimental_transcoding: settings.experimental_transcoding ?? false,
-  source_start_seconds: String(settings.source_start_seconds ?? 15),
-  startup_budget_seconds: String(settings.startup_budget_seconds ?? 45),
+  source_start_seconds: String(settings.source_start_seconds ?? 20),
+  startup_budget_seconds: String(settings.startup_budget_seconds ?? 28),
   waiting_card_seconds: String(settings.waiting_card_seconds ?? 20),
 });
 

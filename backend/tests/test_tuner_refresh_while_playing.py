@@ -29,7 +29,14 @@ def test_APAGADO_NO_SE_COMPRUEBA_NADA_AL_ABRIR(monkeypatch):
         raise tuner.EngineStreamError('nothing')
         yield b''
     monkeypatch.setattr(tuner, 'relay_ranked_streams', no_source)
+    # With no source left the route sends the end card (16-10) instead of a
+    # 502; read to the end, which also releases the tuner slot.
+    monkeypatch.setattr(tuner.waiting_card, 'END_CARD_SECONDS', 0.05)
     request = Mock(method='GET', client=Mock(host='127.0.0.1'))
-    with pytest.raises(Exception):
-        asyncio.run(tuner.tuner_channel(1, request))
+
+    async def open_and_read():
+        response = await tuner.tuner_channel(1, request)
+        async for _ in response.body_iterator:
+            pass
+    asyncio.run(open_and_read())
     assert started == []

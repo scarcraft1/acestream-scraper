@@ -16,6 +16,7 @@ class TunerSettingsResponse(BaseModel):
     experimental_transcoding: bool = Field(False, description="Experimental CPU-intensive transcoding for midstream recovery; default recovery requires client reconnection")
     source_start_seconds: int = Field(15, description="Seconds a source gets to deliver its first byte before the next is tried")
     startup_budget_seconds: int = Field(45, description="Seconds for the whole start across sources; keep it under the player's own timeout (Kodi gives up after about 30)")
+    waiting_card_seconds: int = Field(20, description="Seconds without video before a «Conectando…» card is sent while more sources are tried; 0 = never")
 
 
 class TunerSettingsUpdate(BaseModel):
@@ -28,6 +29,7 @@ class TunerSettingsUpdate(BaseModel):
     experimental_transcoding: Optional[bool] = None
     source_start_seconds: Optional[int] = Field(None, ge=5, le=180)
     startup_budget_seconds: Optional[int] = Field(None, ge=5, le=180)
+    waiting_card_seconds: Optional[int] = Field(None, ge=0, le=28)
 
 
 class TunerRenumbered(BaseModel):

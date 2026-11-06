@@ -1,0 +1,46 @@
+# The fork's code on top of an upstream image, nothing else.
+#
+# The upstream image already carries the engine, Acexy, ffmpeg, ZeroNet and
+# the Python dependencies (backend/requirements.txt is unchanged in this
+# fork). Rebuilding all that on an A55 would take hours; this only swaps the
+# application code and the compiled interface, so it builds on the device
+# itself without emulation: the Python copy is architecture-independent and
+# the interface stage runs on the build platform.
+#
+# BASE_IMAGE is pinned by digest on purpose: a floating tag would update the
+# engine and everything else behind the user's back. The default is the
+# multi-arch index of the `develop` image published for develop da213725
+# (read 2026-11-12; its amd64 entrypoint.sh, warp-setup.sh and
+# warp_startup.py were compared byte for byte with da213725). A box that must
+# keep the image it already has passes its own digest:
+#
+#   docker build -f Dockerfile.fork --build-arg BASE_IMAGE=docker.io/pipepito/acestream-scraper@sha256:<its digest> .
+#
+# With podman, add `--format docker`: the default OCI format drops the
+# upstream HEALTHCHECK without failing.
+ARG BASE_IMAGE=docker.io/pipepito/acestream-scraper@sha256:27f4c892f81399e36876c72e2cd486a9688cecb346568ce255ff1ade12b281ca
+
+FROM --platform=$BUILDPLATFORM docker.io/library/node:20-slim AS interface
+WORKDIR /src
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN ./node_modules/.bin/vite build
+
+FROM ${BASE_IMAGE}
+# Replaced, not merged: a module deleted in the fork must not linger from
+# the upstream copy and still be imported.
+RUN rm -rf /app/app /app/migrations /app/frontend_build
+COPY backend/app /app/app
+COPY backend/main.py /app/main.py
+COPY backend/migrations /app/migrations
+# Since v2.2 the application reads its version at startup (app/config/version.py)
+# and refuses to start without it.
+COPY version.txt /app/version.txt
+COPY --from=interface /src/dist/ /app/frontend_build/
+# WARP's optional helpers (WARP_ALLOW_INBOUND, WARP_SOCKS_PORT, TOR_SOCKS_PORT):
+# the entrypoint starts them under its supervisor from its own directory, so
+# the entrypoint that knows them comes with them. warp-setup.sh is develop's,
+# already in the base image.
+COPY entrypoint.sh docker/scripts/warp-inbound.sh docker/scripts/warp-socks.py docker/scripts/tcp-forward.py /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/warp-inbound.sh /usr/local/bin/warp-socks.py /usr/local/bin/tcp-forward.py

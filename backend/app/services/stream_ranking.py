@@ -39,8 +39,8 @@ def sort_streams_curated(streams: Iterable[T]) -> List[T]:
     return sorted(streams, key=stream_sort_key)
 
 
-# Castilian first (Óscar, 20-10: in the test Eurosport 1 came out in Russian
-# and DAZN F1 in German, with Spanish sources online on the same channel).
+# Castilian first (20-10: in the test one channel came out in Russian
+# and another in German, with Spanish sources online on the same channel).
 # Evidence of Castilian: a first audio track tagged Spanish, or a name tag such
 # as [ES], (ES), "ES |", Spain, España, castellano. Another language: a country
 # tag other than ES ([DE], "UK |", "FR ·"...), audio tracks that are all of

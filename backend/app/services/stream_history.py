@@ -46,7 +46,7 @@ BAD_EVIDENCE = 2.0
 BAD_SCORE = 0.25
 PRUNE_EVERY = 500
 # One «bad audio» report only sends a source back; it hides it from this many on
-# (Óscar, 04-11: «si la misma fuente se marca varias veces»).
+# (04-11: «si la misma fuente se marca varias veces»).
 BAD_AUDIO_REPORTS_TO_HIDE = 2
 # A row written with a clock that ran ahead (a box switched on before its clock
 # synchronised) says nothing reliable about when it happened: it is ignored

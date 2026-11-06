@@ -2,7 +2,7 @@
 
 Kodi waits 30 s for the video. When nothing has come after the threshold,
 the card goes instead and the relay keeps trying sources; the first real
-byte is spliced in. Óscar wants it as rarely as possible: never on a channel
+byte is spliced in. It should appear as rarely as possible: never on a channel
 that starts in time.
 """
 import asyncio
@@ -144,7 +144,7 @@ def _split(out):
 
 @pytest.mark.asyncio
 async def test_EN_PLENA_EMISION_UN_SILENCIO_LARGO_SALE_CON_CARTA(monkeypatch):
-    """Measured on the box: M+ LaLiga stopped 4 s in and Kodi showed the
+    """Measured on the box: one channel stopped 4 s in and Kodi showed the
     last frame for over a minute while the relay searched."""
     monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
     out = [c async for c in waiting_card.with_waiting_card(_playing([0.4]), CARD, after=5,
@@ -389,7 +389,7 @@ def test_DOS_GET_A_UN_CANAL_MUERTO_CARTA_FINAL_Y_NINGUN_SINTONIZADOR_OCUPADO(ale
 @pytest.mark.asyncio
 async def test_LA_CARTA_VUELVE_A_EMPEZAR_MIENTRAS_SE_SIGUE_BUSCANDO(monkeypatch):
     """The last resort can look for longer than the card lasts: without the
-    card again, Kodi gets no data and gives up (Óscar, 02-11)."""
+    card again, Kodi gets no data and gives up (02-11)."""
     monkeypatch.setattr(waiting_card, 'STEP_SECONDS', 0.02)
     out = [c async for c in waiting_card.with_waiting_card(_source(0.9), CARD, after=0, card_seconds=0.3)]
     card_bytes = sum(len(c) for c in out if c not in (b'real-1', b'real-2'))

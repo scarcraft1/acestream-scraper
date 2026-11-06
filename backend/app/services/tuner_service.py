@@ -253,7 +253,7 @@ class TunerService:
             # A saved preference (#267) comes before all of what follows: the
             # user's order for this channel is the relay's order. Then, among
             # sources seen online, recent or not, the language decides before
-            # freshness (Óscar, 20-10): on Eurosport 1 the only source checked
+            # freshness (20-10): on one channel the only source checked
             # that day was Russian and an unmarked one had been online the day
             # before. If that one is gone, the relay moves on after one
             # attempt. Within that: an official HTTP source first (it opens in

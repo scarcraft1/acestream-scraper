@@ -224,7 +224,7 @@ describe('TVChannelDetail', () => {
   });
 
   it('changes the guide source, so the same channel can take another guide', async () => {
-    // TDP.TV in one guide is Teledeporte in another: the id alone cannot say
+    // TDP.TV in one guide is Canal Deportes in another: the id alone cannot say
     // which guide is meant, and the form had no way to choose it.
     const mutateAsync = jest.fn().mockResolvedValue(undefined);
     mockUseUpdateTVChannel.mockReturnValue({ mutateAsync });

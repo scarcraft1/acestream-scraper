@@ -189,7 +189,7 @@ def _plex_list(token='tok-1'):
     return {'headers': {'user-agent': 'Mozilla/5.0', 'X-Plex-Token': token},
             'regions': {'es': {'name': 'Spain'}},
             'channels': {
-                PLEX_ID: {'name': 'The Blacklist', 'logo': 'https://plex/logo.png', 'regions': ['es']},
+                PLEX_ID: {'name': 'Serie Ejemplo', 'logo': 'https://plex/logo.png', 'regions': ['es']},
                 '643054b1fc3be59477853717-aaaaaaaaaaaaaaaaaaaaaaaa': {'name': 'Solo EE. UU.', 'regions': ['us']},
             }}
 
@@ -197,10 +197,10 @@ def _plex_list(token='tok-1'):
 def test_plex_imports_spanish_channels(fake):
     fake({plex.LIST: _plex_list()})
     streams = _imported(plex)
-    assert set(streams) == {'The Blacklist'}
-    assert streams['The Blacklist']['stream_url'] == f'plex://{PLEX_ID}'
-    assert streams['The Blacklist']['tvg_logo'] == 'https://plex/logo.png'
-    assert streams['The Blacklist']['group_title'] == 'Plex'
+    assert set(streams) == {'Serie Ejemplo'}
+    assert streams['Serie Ejemplo']['stream_url'] == f'plex://{PLEX_ID}'
+    assert streams['Serie Ejemplo']['tvg_logo'] == 'https://plex/logo.png'
+    assert streams['Serie Ejemplo']['group_title'] == 'Plex'
 
 
 def test_plex_resolves_without_the_redirector(fake):
@@ -233,8 +233,8 @@ def test_plex_rejects_a_made_up_id(fake):
 
 def _samsung_list():
     return {'slug': 'stvp-{id}', 'regions': {'es': {'channels': {
-        'ESBD800001RJ': {'name': 'Cine Friki', 'logo': 'https://s/cf.png', 'group': 'Cine'},
-        'ESBC4100001NZ': {'name': 'La 1', 'license_url': 'https://widevine/x'},
+        'ESXX0000001AA': {'name': 'Cine Friki', 'logo': 'https://s/cf.png', 'group': 'Cine'},
+        'ESXX0000002BB': {'name': 'Canal Uno', 'license_url': 'https://widevine/x'},
     }}}}
 
 
@@ -243,16 +243,16 @@ def test_samsung_leaves_out_drm_channels(fake):
     fake({samsung.LIST: _samsung_list()})
     streams = _imported(samsung)
     assert set(streams) == {'Cine Friki'}
-    assert streams['Cine Friki']['stream_url'] == 'samsung://ESBD800001RJ'
+    assert streams['Cine Friki']['stream_url'] == 'samsung://ESXX0000001AA'
     assert streams['Cine Friki']['tvg_logo'] == 'https://s/cf.png'
     assert streams['Cine Friki']['group_title'] == 'Samsung TV Plus'
 
 
 def test_samsung_keeps_the_redirectors_answer(fake, clock):
-    http = fake({'https://jmp2.uk/stvp-ESBD800001RJ': 'https://cdn/cine-friki.m3u8'})
-    assert live_providers.resolve('samsung://ESBD800001RJ') == 'https://cdn/cine-friki.m3u8'
+    http = fake({'https://jmp2.uk/stvp-ESXX0000001AA': 'https://cdn/cine-friki.m3u8'})
+    assert live_providers.resolve('samsung://ESXX0000001AA') == 'https://cdn/cine-friki.m3u8'
     clock.now += 3600
-    assert live_providers.resolve('samsung://ESBD800001RJ') == 'https://cdn/cine-friki.m3u8'
+    assert live_providers.resolve('samsung://ESXX0000001AA') == 'https://cdn/cine-friki.m3u8'
     assert len(http.calls) == 1
 
 

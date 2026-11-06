@@ -63,7 +63,7 @@ class SettingsRepository:
     DEFAULT_TUNER_SOURCE_START_SECONDS = '20'
     DEFAULT_TUNER_STARTUP_BUDGET_SECONDS = '28'
     # The waiting card (services/waiting_card.py) only after the first source
-    # had its 20 s: Óscar wants it as rarely as possible. 0 turns it off.
+    # had its 20 s: It should appear as rarely as possible. 0 turns it off.
     DEFAULT_TUNER_WAITING_CARD_SECONDS = '20'
 
     # Keys whose stored empty value means "not configured" rather than

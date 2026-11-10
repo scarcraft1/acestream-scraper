@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = '20261109_1200'
+revision = '20261109_1201'  # fork: develop's id 20261109_1200 is the box's merge revision (FORK.md §5)
 down_revision = '20261107_1200'
 branch_labels = None
 depends_on = None

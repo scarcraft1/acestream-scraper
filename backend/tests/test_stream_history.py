@@ -176,6 +176,26 @@ def test_stream_attempts_migration_upgrade_path(tmp_path, previous_revision):
 
 
 
+def test_a_database_at_the_box_merge_revision_still_gets_the_epg_identities(tmp_path):
+    """Develop published its EPG identities migration as 20261109_1200, the id
+    the box records for the fork's merge revision. In the fork that migration
+    is 20261109_1201, so a database at the box's 20261109_1200 must still
+    create its table on the way to the head."""
+    import sqlite3
+    from contextlib import closing
+    path = tmp_path / 'box.db'
+    upgrade_to_revision(path, '20261109_1200')
+    engine = create_engine(database_url_for(path))
+    assert 'epg_channel_identities' not in inspect(engine).get_table_names()
+    engine.dispose()
+    upgrade_to_head(path)
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '20261110_1200'
+    engine = create_engine(database_url_for(path))
+    assert 'epg_channel_identities' in inspect(engine).get_table_names()
+    engine.dispose()
+
+
 def test_box_revision_follows_the_history_and_downgrades_to_it(tmp_path):
     """20261104_1200 is the fork's empty revision the box already records: a
     database there reaches the merge head with develop's offline column, and
@@ -190,7 +210,7 @@ def test_box_revision_follows_the_history_and_downgrades_to_it(tmp_path):
         with closing(sqlite3.connect(path)) as db:
             return db.execute('SELECT version_num FROM alembic_version').fetchone()[0]
 
-    assert version() == '20261109_1200'
+    assert version() == '20261110_1200'
     engine = create_engine(database_url_for(path))
     assert 'offline_since' in {c['name'] for c in inspect(engine).get_columns('acestream_channels')}
     engine.dispose()

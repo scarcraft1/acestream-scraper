@@ -224,6 +224,23 @@ class TVChannel(Base):
         return channel_category(self.category).id
 
 
+class ChannelGroup(Base):
+    """A Kodi tab. Tree order is tab order; a top-level group owns a block of channel numbers."""
+    __tablename__ = "channel_groups"
+    __table_args__ = (UniqueConstraint("name", name="uq_channel_groups_name"),)
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    parent_id = Column(Integer, ForeignKey("channel_groups.id", ondelete="SET NULL"), nullable=True, index=True)
+    position = Column(Integer, nullable=False, default=0)
+    # Fixed the first time and kept when tabs move; only top-level groups have one.
+    number_block = Column(Integer, nullable=True)
+    # TV channel ids in the order chosen inside the group; the rest follow by number.
+    member_order = Column(JSON, nullable=False, default=list)
+    created_at = Column(UtcDateTime(), nullable=False, default=_utcnow)
+    updated_at = Column(UtcDateTime(), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+
 class EPGChannelIdentity(Base):
     """One logical channel, with source-qualified EPGChannel memberships."""
     __tablename__ = 'epg_channel_identities'

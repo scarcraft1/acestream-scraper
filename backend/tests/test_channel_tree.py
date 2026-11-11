@@ -266,3 +266,9 @@ def test_clean_name_drops_promotion_links_and_quality_with_p_but_keeps_a_leading
     assert T.clean_name("Demo Tennis FHDp ** c0de --> LIST") == "Demo Tennis"
     assert T.clean_name("Demo Tennis SDp") == "Demo Tennis"
     assert T.clean_name("+demo") == "+demo"
+
+
+def test_norm_keeps_letters_of_any_script():
+    assert T.norm("Демо Спорт") != T.norm("Демо Кино")
+    assert T.norm("Демо Спорт") == T.norm("ДЕМО  спорт")
+    assert T.resolve("Демо Спорт", ["Демо Кино"])["status"] == "new"

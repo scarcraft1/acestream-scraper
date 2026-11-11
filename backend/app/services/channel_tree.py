@@ -352,7 +352,8 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
 def norm(text: str) -> str:
     text = unicodedata.normalize("NFD", text)
     text = re.sub("[̀-ͯ]", "", text).lower()
-    return re.sub(r"[^a-z0-9+]+", "", text)
+    # Letters of any script: a Cyrillic name must not normalise to nothing.
+    return "".join(ch for ch in text if ch.isalnum() or ch == "+")
 
 
 def resolve(name: str, names: Iterable[str]) -> dict[str, Any]:

@@ -69,6 +69,23 @@ def test_words_and_starts_take_an_optional_loose_number():
     assert T.run(root, {"name": "Other Sample 3"}).leaf is None
 
 
+def test_a_value_ending_in_a_digit_takes_only_a_separate_number():
+    root = tree(node("t", [words("SAMPLE 1")], leaf={"channel": "Sample 1"}))
+    assert T.run(root, {"name": "Sample 1 HD"}).leaf["channel"] == "Sample 1"
+    assert T.run(tree(node("t", [words("DEMO 360")], leaf={"channel": "Demo #"})), {"name": "Demo 360 4"}).num == "4"
+    assert T.run(root, {"name": "Sample 10"}).leaf is None
+    assert T.run(root, {"name": "Sample 12"}).leaf is None
+    root = tree(node("t", [{"field": "name", "op": "starts", "value": "F1"}], leaf={"channel": "F1"}))
+    assert T.run(root, {"name": "F12 Demo"}).leaf is None
+
+
+def test_a_clock_or_a_date_is_not_a_loose_number():
+    root = tree(node("t", [words("LIGA")], leaf={"channel": "Liga #"}))
+    assert T.run(root, {"name": "Liga 21:00 Demo A - Demo B"}).leaf["channel"] == "Liga"
+    assert T.run(root, {"name": "Liga 11/11"}).leaf["channel"] == "Liga"
+    assert T.run(root, {"name": "Liga 2"}).leaf["channel"] == "Liga 2"
+
+
 def test_word_boundaries_follow_the_editor_and_plus_is_part_of_a_word():
     root = tree(node("t", [words("DEMO")], leaf={"channel": "Demo"}))
     assert T.run(root, {"name": "Demo+"}).leaf is None
@@ -184,6 +201,8 @@ def test_resolve_against_existing_channels():
     assert T.resolve("demo  canal", names) == {"status": "ok", "name": "Demo Canal"}
     assert T.resolve("Sample 1", names) == {"status": "ok", "name": "Sample", "implicit_one": True}
     assert T.resolve("Twin", names)["status"] == "amb"
+    # The implicit 1 does not pick one of two bases: it reports the ambiguity.
+    assert T.resolve("Twin 1", names) == {"status": "amb", "name": "Twin 1", "hits": ["Twin", "TWIN"]}
     assert T.resolve("Nuevo", names) == {"status": "new", "name": "Nuevo"}
 
 

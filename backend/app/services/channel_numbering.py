@@ -48,6 +48,7 @@ class Numbering:
     overflow: list[str]
     out_of_order: list[str]
     drags: list[tuple[str, int]]
+    walk: list[int] = field(default_factory=list)  # placement order, before sorting by number
 
 
 def tree_order(groups: Sequence[Group]) -> list[Group]:
@@ -93,6 +94,9 @@ def number_channels(groups: Sequence[Group], channels: Sequence[Channel]) -> Num
             g = by_name.get(g.parent)
         return g
 
+    def descendants(name: str) -> set[str]:
+        return {g.name for g in groups if name in ancestors(g.name)}
+
     chans = sorted(channels, key=lambda c: c.order)
     by_id = {c.id: c for c in chans}
     expanded: dict[int, list[str]] = {}
@@ -126,12 +130,18 @@ def number_channels(groups: Sequence[Group], channels: Sequence[Channel]) -> Num
         def in_group() -> list[int]:
             return [c.id for c in chans if c.id not in placed and name in expanded[c.id]]
 
+        above = set(ancestors(name))
+
         def ready(cid: int) -> bool:
-            return all(x in seen or x == name for x in expanded[cid])
+            # Ancestors show up together with this group, so they never make a channel wait.
+            return all(x in seen or x == name or x in above for x in expanded[cid])
 
         candidates = [cid for cid in in_group() if ready(cid)]
-        if name not in seen and not candidates and in_group():
-            extra = lambda cid: [x for x in expanded[cid] if x not in seen and x != name]  # noqa: E731
+        extra = lambda cid: [x for x in expanded[cid] if x not in seen and x != name and x not in above]  # noqa: E731
+        below = descendants(name)
+        # A channel that only waits for subgroups of this group is placed there, right after: no drag.
+        waits_below = any(all(x in below for x in extra(cid)) for cid in in_group())
+        if name not in seen and not candidates and in_group() and not waits_below:
             first = min(in_group(), key=lambda cid: (len(extra(cid)), key(name, cid)))
             drags.append((name, first))
             place(first, name)
@@ -175,6 +185,7 @@ def number_channels(groups: Sequence[Group], channels: Sequence[Channel]) -> Num
         numbers[cid] = n
         used.add(n)
 
+    walk = list(out)
     out.sort(key=numbers.__getitem__)
     appeared: list[str] = []
     seen_now: set[str] = set()
@@ -185,7 +196,7 @@ def number_channels(groups: Sequence[Group], channels: Sequence[Channel]) -> Num
                 appeared.append(g)
     want = [g.name for g in ordered if g.name in seen_now]
     out_of_order = [g for i, g in enumerate(appeared) if want.index(g) != i]
-    return Numbering(numbers, blocks, out, home, overflow, out_of_order, drags)
+    return Numbering(numbers, blocks, out, home, overflow, out_of_order, drags, walk)
 
 
 def reblock(groups: Sequence[Group], numbers: dict[int, int]) -> tuple[dict[str, int], dict[int, int]]:
@@ -203,3 +214,31 @@ def reblock(groups: Sequence[Group], numbers: dict[int, int]) -> tuple[dict[str,
             if ob <= n < ob + BLOCK:
                 new_numbers[cid] = nb + (n - ob)
     return new_blocks, new_numbers
+
+
+def reorder_block(groups: Sequence[Group], channels: Sequence[Channel], top: str) -> dict[int, int]:
+    """Renumber one top-level block after its order changed (members or subgroups).
+
+    Ordinary numbering keeps every number that is already inside its block, so an
+    order chosen inside a group would never show. This explicit action hands the
+    numbers the block's channels already hold back out in the walk order, so no
+    channel outside the block moves and the block keeps its gaps.
+    """
+    result = number_channels(groups, channels)
+    by_name = {g.name: g for g in groups}
+
+    def top_of(name: Optional[str]) -> Optional[str]:
+        g = by_name.get(name) if name else None
+        seen: set[str] = set()
+        while g and g.parent and g.parent not in seen:
+            seen.add(g.parent)
+            g = by_name.get(g.parent)
+        return g.name if g else None
+
+    numbers = dict(result.numbers)
+    walk = [cid for cid in result.walk if top_of(result.home.get(cid)) == top]
+    held = sorted(numbers[cid] for cid in walk)
+    for cid, n in zip(walk, held):
+        numbers[cid] = n
+    return numbers
+

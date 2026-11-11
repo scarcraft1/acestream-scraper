@@ -236,3 +236,33 @@ def test_groups_set_on_the_leaf_replace_the_inherited_ones():
     assert T.run(root, {"name": "Demo Two"}).groups == ["Sports"]
     sec["children"][0]["leaf"]["groups"] = ""
     assert T.run(root, {"name": "Demo One"}).groups == []
+
+
+def test_name_placeholder_takes_the_stream_name_without_publisher_additions():
+    assert T.clean_name("Demo Sport 2 HD a1b2 --> LIST ONE") == "Demo Sport 2"
+    assert T.clean_name("Demo Sport 3 · 1080p · LIST TWO") == "Demo Sport 3"
+    assert T.clean_name("Demo Sport 4 0f9 ...e21") == "Demo Sport 4"
+    assert T.clean_name("★ Demo News (XX) *") == "Demo News"
+    # Without a publisher mark a trailing number is part of the name.
+    assert T.clean_name("Demo 2024") == "Demo 2024"
+    assert T.clean_name("Demo 2024 --> LIST") == "Demo"
+    root = tree(node("rest", [], leaf={"channel": "{nombre}"}))
+    assert T.run(root, {"name": "Demo Local TV FHD c0de --> LIST"}).leaf["channel"] == "Demo Local TV"
+    root = tree(node("rest", [], leaf={"channel": "Demo #"}))
+    assert T.run(root, {"name": "{nombre} 5"}).leaf["channel"] == "Demo"
+
+
+def test_group_placeholder_takes_the_group_of_the_stream_list():
+    root = tree(node("rest", [], leaf={"channel": "{nombre}", "groups": "{grupo}"}))
+    st = T.run(root, {"name": "Demo Local TV", "group": "Region A"})
+    assert (st.leaf["channel"], st.groups) == ("Demo Local TV", ["Region A"])
+    assert T.run(root, {"name": "Demo Local TV"}).groups == []
+
+
+def test_clean_name_drops_promotion_links_and_quality_with_p_but_keeps_a_leading_plus():
+    assert T.clean_name("Demo Sports example.top https://example.com/x --> LIST") == "Demo Sports"
+    assert T.clean_name("Demo Club | example.online (VPN) | https://example.org/a") == "Demo Club"
+    assert T.clean_name("Demosite.tv") == "Demosite.tv"
+    assert T.clean_name("Demo Tennis FHDp ** c0de --> LIST") == "Demo Tennis"
+    assert T.clean_name("Demo Tennis SDp") == "Demo Tennis"
+    assert T.clean_name("+demo") == "+demo"

@@ -18,7 +18,7 @@ from app.models.stream_attempts import StreamAttempt
 from app.services import tuner_playback_service
 from app.services.stream_history import StreamHistoryRecorder, score_sources
 from app.services.tuner_service import TunerService
-from tests.migration_test_utils import database_url_for, downgrade_to_revision, upgrade_to_head, upgrade_to_revision
+from tests.migration_test_utils import current_head_revision, database_url_for, downgrade_to_revision, upgrade_to_head, upgrade_to_revision
 
 NOW = datetime(2026, 11, 2, 18, 0, tzinfo=timezone.utc)
 LIST_A = 'https://lists.example.test/a.m3u'
@@ -190,7 +190,7 @@ def test_a_database_at_the_box_merge_revision_still_gets_the_epg_identities(tmp_
     engine.dispose()
     upgrade_to_head(path)
     with closing(sqlite3.connect(path)) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '20261109_1300'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == current_head_revision()
     engine = create_engine(database_url_for(path))
     assert 'epg_channel_identities' in inspect(engine).get_table_names()
     engine.dispose()
@@ -210,7 +210,7 @@ def test_box_revision_follows_the_history_and_downgrades_to_it(tmp_path):
         with closing(sqlite3.connect(path)) as db:
             return db.execute('SELECT version_num FROM alembic_version').fetchone()[0]
 
-    assert version() == '20261109_1300'
+    assert version() == current_head_revision()
     engine = create_engine(database_url_for(path))
     assert 'offline_since' in {c['name'] for c in inspect(engine).get_columns('acestream_channels')}
     engine.dispose()

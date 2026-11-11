@@ -214,10 +214,51 @@ def fill(template: str, num: Optional[str]) -> str:
     return template.replace("#", num)
 
 
+# «{nombre}» in a channel template: the stream name without what the publisher appends
+# (« --> LIST», « · 1080p · LIST», «...d18» and the code before it), quality, codes or leading ornaments.
+_NAME_TAIL = re.compile(r"\s*(-->|\s·\s).*$", re.DOTALL)
+_PUBLISHER_ID = re.compile(r"\s+[0-9a-f]{3,4}$", re.IGNORECASE)
+_TRAILING_SEPARATORS = re.compile(r"[\s\-|:·,;]+$")
+# Promotion links and domains («example.top», «https://…») and quality with a trailing «p» («FHDp», «SDp»).
+_PROMO = re.compile(r"(\s)(https?://\S+|\S+\.(top|online|blog|com|net|org|es|tv)(/\S*)?)(?=\s|$)", re.IGNORECASE)
+_QUALITY_P = re.compile(r"(^|\s)(F?HD|SD|UHD)P(?=\s|$)", re.IGNORECASE)
+NAME_PLACEHOLDER = "{nombre}"
+GROUP_PLACEHOLDER = "{grupo}"
+
+
+def _strip_quality(text: str) -> str:
+    return _SPACES.sub(" ", _QUALITY.sub(r"\1", text)).strip()
+
+
+def clean_name(name: str) -> str:
+    text = name or ""
+    marked = "-->" in text or "..." in text
+    text = _PROMO.sub(r"\1", _NAME_TAIL.sub("", text))
+    text = _SPACES.sub(" ", _QUALITY_P.sub(r"\1", _CODES.sub(r"\1", _QUALITY.sub(r"\1", text)))).strip()
+    if marked:
+        while True:
+            shorter = _PUBLISHER_ID.sub("", text)
+            if shorter == text or not shorter:
+                break
+            text = _strip_quality(shorter)
+    start = 0
+    while start < len(text) and not (text[start].isalnum() or text[start] == "+"):
+        start += 1
+    return _TRAILING_SEPARATORS.sub("", text[start:])
+
+
+def fill_leaf(template: str, num: Optional[str], name: str) -> str:
+    out = fill(template, num)
+    if NAME_PLACEHOLDER not in out:
+        return out
+    return _SPACES.sub(" ", out.replace(NAME_PLACEHOLDER, clean_name(name))).strip()
+
+
 def _add_groups(st: TreeState, groups: Optional[str]) -> None:
     # Several groups separated by «;» (GOL goes to Deportes, TDT and Generalistas).
     for g in (groups or "").split(";"):
-        g = g.strip()
+        # «{grupo}»: the group the stream carries in its list.
+        g = g.strip().replace(GROUP_PLACEHOLDER, st.group).strip()
         if g and g not in st.groups:
             st.groups.append(g)
 
@@ -282,7 +323,7 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
                 guide = leaf.get("guide") or ""
                 st.leaf = {
                     "node": node["id"],
-                    "channel": fill(leaf.get("channel") or "", st.num),
+                    "channel": fill_leaf(leaf.get("channel") or "", st.num, st.kodi),
                     "guide": fill(guide, st.num) if guide else "",
                 }
             # Groups set on the channel replace the ones inherited along the path.

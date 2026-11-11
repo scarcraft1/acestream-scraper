@@ -189,3 +189,31 @@ def test_resolve_against_existing_channels():
 
 def test_norm_ignores_accents_case_and_punctuation_but_keeps_plus():
     assert T.norm("Canál  Demo+ ·1") == "canaldemo+1"
+
+
+def test_a_hand_fix_is_a_branch_on_the_content_id_placed_first():
+    fix = node(
+        "fix",
+        [{"field": "cid", "op": "exact", "value": "c0ffee01"}],
+        children=[node("to-b", [{"field": "cid", "op": "exact", "value": "c0ffee01"}], leaf={"channel": "Demo B"})],
+    )
+    root = tree(fix, node("a", [words("DEMO")], leaf={"channel": "Demo A"}))
+    assert T.run(root, {"name": "Demo", "cid": "c0ffee01"}).leaf["channel"] == "Demo B"
+    assert T.run(root, {"name": "Demo", "cid": "c0ffee02"}).leaf["channel"] == "Demo A"
+
+
+def test_groups_set_on_the_leaf_replace_the_inherited_ones():
+    sec = node(
+        "sec",
+        [words("DEMO")],
+        group="Sports",
+        children=[
+            node("own", [words("DEMO ONE")], leaf={"channel": "Demo One", "groups": "General; Local"}),
+            node("rest", [], leaf={"channel": "Demo"}),
+        ],
+    )
+    root = tree(sec)
+    assert T.run(root, {"name": "Demo One"}).groups == ["General", "Local"]
+    assert T.run(root, {"name": "Demo Two"}).groups == ["Sports"]
+    sec["children"][0]["leaf"]["groups"] = ""
+    assert T.run(root, {"name": "Demo One"}).groups == []

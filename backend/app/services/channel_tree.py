@@ -137,6 +137,7 @@ class TreeState:
     group: str = ""
     kind: str = "acestream"
     source_list: str = ""
+    cid: str = ""
     res: str = "—"
     groups: list[str] = field(default_factory=list)
     num: Optional[str] = None
@@ -157,6 +158,7 @@ def _field_value(name: str, st: TreeState) -> str:
         "res": st.res,
         "list": st.source_list,
         "num": st.num or "",
+        "cid": st.cid,
     }
     return values.get(name, "") or ""
 
@@ -248,7 +250,7 @@ def _sub(rx: re.Pattern[str], repl: str, text: str, count: int) -> str:
 
 
 def run(root: Node, source: dict[str, Any]) -> TreeState:
-    """Classify one stream. ``source`` has ``name`` and optionally ``tvg``, ``group``, ``kind``, ``list``."""
+    """Classify one stream. ``source`` has ``name`` and optionally ``tvg``, ``group``, ``kind``, ``list``, ``cid``."""
     name = source.get("name") or ""
     st = TreeState(
         work=name,
@@ -257,6 +259,7 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
         group=source.get("group") or "",
         kind=source.get("kind") or "acestream",
         source_list=source.get("list") or "",
+        cid=source.get("cid") or "",
         res=resolution_of(name),
     )
 
@@ -277,6 +280,10 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
                     "channel": fill(leaf.get("channel") or "", st.num),
                     "guide": fill(guide, st.num) if guide else "",
                 }
+            # Groups set on the channel replace the ones inherited along the path.
+            if leaf.get("groups") is not None:
+                st.groups = []
+                _add_groups(st, leaf["groups"])
             return st
         entered = None
         for child in children:

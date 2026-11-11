@@ -272,3 +272,10 @@ def test_norm_keeps_letters_of_any_script():
     assert T.norm("Демо Спорт") != T.norm("Демо Кино")
     assert T.norm("Демо Спорт") == T.norm("ДЕМО  спорт")
     assert T.resolve("Демо Спорт", ["Демо Кино"])["status"] == "new"
+
+
+def test_a_leaf_without_guide_ignores_the_one_the_streams_carry():
+    root = tree(node("rest", [], leaf={"channel": "Demo #", "guide": "", "noGuide": True}))
+    assert T.run(root, {"name": "Demo 3", "tvg": "Other.3.xx"}).leaf["guide"] is None
+    root = tree(node("rest", [], leaf={"channel": "Demo #", "guide": ""}))
+    assert T.run(root, {"name": "Demo 3", "tvg": "Other.3.xx"}).leaf["guide"] == ""

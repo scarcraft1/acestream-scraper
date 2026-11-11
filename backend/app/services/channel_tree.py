@@ -39,7 +39,10 @@ _CODES = re.compile(
 _SPACES = re.compile(r"\s+")
 _LONE_HASH = re.compile(r"(^|\s)#(\s|$)")
 _HASH_NUMBER = "0?([0-9]{1,2})"
-_OPTIONAL_NUMBER = rf"(?:(?:[^{_W}+]+)?0?([0-9]{{1,2}}))?"
+# A clock or a date («21:00», «11/11») is not a channel number.
+_OPTIONAL_NUMBER = rf"(?:(?:[^{_W}+]+)?0?([0-9]{{1,2}})(?![:./][0-9]))?"
+# After a value that ends in a digit the number must be apart: «SPORT 1» is not «SPORT 10» as 1 + 0.
+_SEPARATE_NUMBER = rf"(?:[^{_W}+]+0?([0-9]{{1,2}})(?![:./][0-9]))?"
 _BAD = object()
 
 
@@ -115,7 +118,9 @@ def cond_regex(op: str, value: str):
     if not tokens:
         return None
     # Without an explicit #, «words» and «starts» also take a loose number after.
-    optional = _OPTIONAL_NUMBER if op in ("words", "starts") and not _LONE_HASH.search(value) else ""
+    optional = ""
+    if op in ("words", "starts") and not _LONE_HASH.search(value):
+        optional = _SEPARATE_NUMBER if value.strip()[-1].isdigit() else _OPTIONAL_NUMBER
     try:
         if op in ("words", "not"):
             body = f"[^{_W}+]+".join(tokens) + (optional if op == "words" else "")
@@ -324,4 +329,6 @@ def resolve(name: str, names: Iterable[str]) -> dict[str, Any]:
         base = [n for n in names if norm(n) == base_key]
         if len(base) == 1:
             return {"status": "ok", "name": base[0], "implicit_one": True}
+        if len(base) > 1:
+            return {"status": "amb", "name": name, "hits": base}
     return {"status": "new", "name": name}

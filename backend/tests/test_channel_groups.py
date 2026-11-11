@@ -60,6 +60,22 @@ def test_order_chosen_inside_a_group_wins_over_numbers():
     assert [cid for cid in r.order] == [3, 1, 2]
 
 
+def test_channels_already_numbered_follow_an_explicit_reorder_of_their_block_only():
+    groups = [G("Alpha", 0, block=100, members=[3, 1, 2]), G("Beta", 1, block=200)]
+    chans = [C(1, "Alpha", number=100), C(2, "Alpha", number=101), C(3, "Alpha", number=105), C(4, "Beta", number=200)]
+    # Ordinary numbering keeps numbers that are already inside the block.
+    assert N.number_channels(groups, chans).numbers == {1: 100, 2: 101, 3: 105, 4: 200}
+    # The explicit reorder shares out the same numbers in the chosen order; Beta does not move.
+    assert N.reorder_block(groups, chans, "Alpha") == {3: 100, 1: 101, 2: 105, 4: 200}
+
+
+def test_reordering_subgroups_renumbers_their_top_block():
+    groups = [G("Sport", 0, block=100), G("League", 1, parent="Sport"), G("Cup", 0, parent="Sport")]
+    chans = [C(1, "League", number=100), C(2, "Cup", number=101)]
+    assert N.number_channels(groups, chans).numbers == {1: 100, 2: 101}
+    assert N.reorder_block(groups, chans, "Sport") == {2: 100, 1: 101}
+
+
 def test_a_group_whose_channels_all_wait_drags_the_one_with_fewest_pending_tabs():
     groups = [G("Alpha", 0), G("Beta", 1), G("Gamma", 2)]
     chans = [C(1, "Alpha", "Beta", "Gamma"), C(2, "Alpha", "Gamma")]
@@ -101,6 +117,12 @@ def test_service_creates_missing_groups_and_writes_stable_numbers(db_session):
     svc.reblock(db_session)
     numbers = {c.name: c.channel_number for c in db_session.query(TVChannel)}
     assert numbers == {"Demo Uno": 200, "Demo Dos": 100, "Demo Tres": N.NO_GROUP, "Demo Cuatro": 201}
+
+    # An order chosen inside Alpha renumbers only Alpha's channels, with the numbers they held.
+    ids = {c.name: c.id for c in db_session.query(TVChannel)}
+    svc.reorder_group(db_session, "Alpha", [ids["Demo Cuatro"], ids["Demo Uno"]])
+    numbers = {c.name: c.channel_number for c in db_session.query(TVChannel)}
+    assert numbers == {"Demo Uno": 201, "Demo Dos": 100, "Demo Tres": N.NO_GROUP, "Demo Cuatro": 200}
 
 
 def test_channel_groups_migration_upgrade_and_downgrade(tmp_path):

@@ -87,3 +87,30 @@ def reblock(db: Session) -> numbering.Numbering:
             c.channel_number = moved[c.id]
     db.flush()
     return renumber(db)
+
+
+def reorder_group(db: Session, name: str, member_ids: list[int] | None = None) -> dict[int, int]:
+    """Save the order chosen inside a group (if given) and renumber its top-level block in that order.
+
+    Only channels of that block change number; they share out the numbers the block already held.
+    """
+    rows, tvs, groups, channels = _inputs(db)
+    by_name = {g.name: g for g in rows}
+    if name not in by_name:
+        raise KeyError(name)
+    if member_ids is not None:
+        by_name[name].member_order = [int(x) for x in member_ids]
+        for g in groups:
+            if g.name == name:
+                g.members = list(by_name[name].member_order)
+    row = by_name[name]
+    by_id = {g.id: g for g in rows}
+    seen: set[int] = set()
+    while row.parent_id is not None and row.parent_id in by_id and row.parent_id not in seen:
+        seen.add(row.parent_id)
+        row = by_id[row.parent_id]
+    numbers = numbering.reorder_block(groups, channels, row.name)
+    for c in tvs:
+        c.channel_number = numbers[c.id]
+    db.commit()
+    return numbers

@@ -324,7 +324,8 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
                 st.leaf = {
                     "node": node["id"],
                     "channel": fill_leaf(leaf.get("channel") or "", st.num, st.kodi),
-                    "guide": fill(guide, st.num) if guide else "",
+                    # None: no guide, not even the one the streams carry; "": automatic.
+                    "guide": None if leaf.get("noGuide") else fill(guide, st.num) if guide else "",
                 }
             # Groups set on the channel replace the ones inherited along the path.
             if leaf.get("groups") is not None:

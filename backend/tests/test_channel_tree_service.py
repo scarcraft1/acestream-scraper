@@ -427,3 +427,28 @@ def test_the_api_explains_one_stream_without_writing(client, db_session):
     db_session.expire_all()
     assert db_session.query(TVChannel).count() == 0
     assert client.post("/api/v1/channel-tree/explain", json={"stream_id": "nope"}).status_code == 404
+
+
+def test_the_majority_guide_is_not_taken_on_a_tie_or_when_no_loaded_guide_has_it(db_session):
+    guide(db_session, "Tie.a", "Tie.b")
+    for i, tvg in enumerate(["Tie.a", "Tie.a", "Tie.b", "Tie.b"]):
+        stream(db_session, f"ti{i}", "TIE", tvg=tvg)
+    for i in range(3):
+        stream(db_session, f"un{i}", "UNLOADED", tvg="Unloaded.example")
+    ChannelTreeService(db_session).apply(root=tree(leaf("Tie", "TIE", "Tie"), leaf("Unloaded", "UNLOADED", "Unloaded")))
+    assert by_name(db_session, "Tie").epg_id is None
+    assert by_name(db_session, "Unloaded").epg_id is None
+
+
+def test_leaf_guides_that_disagree_or_are_not_loaded_are_warnings(db_session):
+    guide(db_session, "Upsilon.example")
+    stream(db_session, "ua", "UPSILON A")
+    stream(db_session, "ub", "UPSILON B")
+    stream(db_session, "ph", "PHI")
+    run = ChannelTreeService(db_session).apply(root=tree(
+        leaf("Ups A", "UPSILON A", "Upsilon", guide="Upsilon.example"),
+        leaf("Ups B", "UPSILON B", "Upsilon", guide="Upsilon.other"),
+        leaf("Phi", "PHI", "Phi", guide="Phi.missing")))
+    assert by_name(db_session, "Upsilon").epg_id is None and by_name(db_session, "Phi").epg_id is None
+    kinds = {(w["channel"], w["kind"]) for w in run.stats["warnings"]}
+    assert kinds == {("Upsilon", "leaf_guides_disagree"), ("Phi", "leaf_guide_not_loaded")}

@@ -265,3 +265,75 @@ def test_the_api_stores_the_tree_previews_without_writing_applies_and_undoes(cli
     assert undo == {"streams": 1, "channels_removed": 1, "channels_kept": 0}
     assert client.post(f"/api/v1/channel-tree/runs/{run['id']}/undo").status_code == 409
     assert client.put("/api/v1/channel-tree", json={"tree": {"label": "bad"}}).status_code == 422
+
+
+@pytest.mark.parametrize("bad, problem", [
+    ({"id": "root", "children": [{"label": "no id", "children": []}]}, "id"),
+    ({"id": "root", "children": [leaf("Phi", "PHI", "Phi") | {"conds": ["PHI"]}]}, "cond"),
+    ({"id": "root", "children": [leaf("Phi", "PHI", "Phi") | {"conds": [{"field": "nombre", "op": "words", "value": "PHI"}]}]}, "field"),
+    ({"id": "root", "children": [leaf("Phi", "PHI", "Phi") | {"children": {"id": "x"}}]}, "children"),
+    ({"id": "root", "children": [leaf("Phi", "PHI", "Phi"), leaf("Phi", "CHI", "Chi")]}, "twice"),
+    ({"id": "root", "children": [leaf("Phi", "PHI", "Phi") | {"leaf": "Phi"}]}, "leaf"),
+    ({"id": "root", "children": [leaf("Phi", "PHI", "Phi") | {"steps": [{"type": "repl", "pattern": 3}]}]}, "step"),
+])
+def test_a_malformed_tree_is_refused_when_stored(db_session, bad, problem):
+    with pytest.raises(TreeRunError, match=problem):
+        ChannelTreeService(db_session).save_tree(bad)
+    assert ChannelTreeService(db_session).tree() is None
+
+
+def test_an_import_survives_a_stored_tree_that_fails(db_session, monkeypatch):
+    from app.repositories.settings_repository import SettingsRepository
+    from app.services.channel_tree_service import AUTO_SETTING, TREE_SETTING
+    from app.services.import_pipeline import ImportEntry, ImportPipeline, ImportReference
+    import json
+    # Stored before validation existed, or by hand: a child without an id.
+    SettingsRepository(db_session).set_setting(TREE_SETTING, json.dumps({"id": "root", "children": [{"conds": []}]}))
+    SettingsRepository(db_session).set_setting(AUTO_SETTING, "true")
+    ImportPipeline.apply(db_session, ImportReference(SOURCE), [ImportEntry(A, "PSI")], "insert_only")
+    db_session.commit()
+    assert db_session.get(AcestreamChannel, A).name == "PSI"
+    assert db_session.get(AcestreamChannel, A).tv_channel_id is None
+    assert db_session.query(ChannelTreeRun).count() == 0
+
+
+@pytest.mark.parametrize("mode", ["snapshot", "insert_only"])
+def test_the_automatic_pass_leaves_inactive_and_protected_streams_alone(db_session, mode):
+    from app.repositories.settings_repository import SettingsRepository
+    from app.services.channel_tree_service import AUTO_SETTING
+    from app.services.import_pipeline import ImportEntry, ImportPipeline, ImportReference
+    C = "c" * 40
+    off = stream(db_session, B, "OMEGA", source_url=SOURCE)
+    off.is_active = False
+    kept = stream(db_session, C, "OMEGA", source_url=SOURCE)
+    kept.epg_update_protected = True
+    db_session.commit()
+    ChannelTreeService(db_session).save_tree(tree(leaf("Omega", "OMEGA", "Omega")))
+    SettingsRepository(db_session).set_setting(AUTO_SETTING, "true")
+    ImportPipeline.apply(db_session, ImportReference(SOURCE),
+                         [ImportEntry(A, "OMEGA"), ImportEntry(B, "OMEGA"), ImportEntry(C, "OMEGA")], mode)
+    omega = by_name(db_session, "Omega")
+    assert db_session.get(AcestreamChannel, A).tv_channel_id == omega.id
+    assert db_session.get(AcestreamChannel, B).tv_channel_id is None
+    assert db_session.get(AcestreamChannel, C).tv_channel_id is None
+
+
+def test_a_pass_that_changes_nothing_leaves_no_run(db_session):
+    stream(db_session, "n1", "NOBODY KNOWS")
+    service = ChannelTreeService(db_session)
+    assert service.apply(trigger="auto", root=tree(section("Section", "NOBODY"))) is None
+    assert db_session.query(ChannelTreeRun).count() == 0
+    # The preview still says what it saw.
+    assert service.preview("all", root=tree(section("Section", "NOBODY")))["stats"]["rest"] == 1
+
+
+def test_runs_past_the_undo_window_are_dropped_by_the_next_run(db_session):
+    from app.models.models import _utcnow
+    service = ChannelTreeService(db_session)
+    stream(db_session, "o1", "OLD ONE")
+    old = service.apply(root=tree(leaf("Old", "OLD ONE", "Old")))
+    old.created_at = _utcnow() - timedelta(days=8)
+    db_session.flush()
+    stream(db_session, "o2", "NEW ONE")
+    new = service.apply(["o2"], root=tree(leaf("New", "NEW ONE", "New")))
+    assert [r.id for r in service.runs()] == [new.id]

@@ -121,8 +121,9 @@ class ChannelTreeService:
         return root if isinstance(root, dict) else None
 
     def save_tree(self, root: dict[str, Any]) -> None:
-        if not isinstance(root, dict) or "children" not in root:
-            raise TreeRunError("a tree is a node with children")
+        problems = tree_engine.tree_problems(root)
+        if problems:
+            raise TreeRunError("; ".join(problems))
         self.settings.set_setting(TREE_SETTING, json.dumps(root, ensure_ascii=False))
 
     def auto_enabled(self) -> bool:
@@ -190,7 +191,8 @@ class ChannelTreeService:
               root: Optional[dict[str, Any]] = None) -> Optional[ChannelTreeRun]:
         """Apply the tree to ``stream_ids`` (all streams when None). Flushes, does not commit.
 
-        Returns the run, or None when there is no tree or nothing to look at.
+        Returns the run, or None when there is no tree or nothing to look at. An automatic run
+        that changes nothing is not kept and also returns None.
         """
         root = root if root is not None else self.tree()
         if root is None:
@@ -207,6 +209,8 @@ class ChannelTreeService:
             return None
         plan = self.plan(root, rows.values())
 
+        if trigger != "preview":
+            self._drop_expired_runs()
         run = ChannelTreeRun(trigger=trigger, stats={})
         self.db.add(run)
         self.db.flush()
@@ -265,11 +269,23 @@ class ChannelTreeService:
             self._add_groups(tv, placed, record)
             self._set_guide(tv, placed, guides, record, warnings)
 
+        if not changes and trigger == "auto":
+            # Streams the tree leaves without a channel come back on every import: no empty runs.
+            # A manual run is kept, changes or not: its counts and warnings are the answer.
+            self.db.delete(run)
+            self.db.flush()
+            return None
         self.db.add_all(changes)
         stats.update({"created": len(created), "changes": len(changes)})
         run.stats = {**dict(stats), "ambiguous_names": sorted(plan.ambiguous)[:50], "warnings": warnings[:100]}
         self.db.flush()
         return run
+
+    def _drop_expired_runs(self) -> None:
+        """Runs past the undo window can no longer be undone: their record goes."""
+        cutoff = _utcnow() - timedelta(days=UNDO_DAYS)
+        for old in self.db.query(ChannelTreeRun).filter(ChannelTreeRun.created_at < cutoff).all():
+            self.db.delete(old)
 
     def _add_groups(self, tv: TVChannel, placed: list[Placement], record) -> None:
         current = split_groups(tv.category)

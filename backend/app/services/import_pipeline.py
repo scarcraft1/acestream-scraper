@@ -136,7 +136,25 @@ class ImportPipeline:
         if policy is None:
             policy = ImportExclusionService(db).snapshot(claim=True)
         apply_mode = {'snapshot': _snapshot, 'insert_only': _insert_only, 'manual': _manual}[mode]
-        return apply_mode(db, reference, entries, policy)
+        result = apply_mode(db, reference, entries, policy)
+        tree = _automatic_tree(db)
+        if tree is not None and mode != 'manual' and not getattr(reference, 'dry_run', False):
+            # The one place that assigns channels on import: rows written now that have no channel,
+            # new or not. Assigned rows keep their channel; «apply to all» is a manual run.
+            db.flush()
+            unassigned = [row.id for row in result.channels if row.tv_channel_id is None]
+            if unassigned:
+                tree.apply(unassigned, trigger='auto')
+        return result
+
+
+def _automatic_tree(db: Session):
+    """The channel rules tree service when its switch is on and a tree is stored, else None."""
+    from app.services.channel_tree_service import ChannelTreeService
+    service = ChannelTreeService(db)
+    if not service.auto_enabled() or service.tree() is None:
+        return None
+    return service
 
 
 def _snapshot(db: Session, reference: ImportReference, entries: list[ImportEntry],
@@ -159,9 +177,11 @@ def _snapshot(db: Session, reference: ImportReference, entries: list[ImportEntry
         missing.delete(synchronize_session=False)
     # The guide step stores the TV channel it assigns in each entry's metadata
     # and may refuse more entries under its own claimed policy snapshot.
-    assigned = M3UService().auto_create_tv_channels_from_epg(
-        db, [(item.entry.channel_id, item.entry.name, item.entry.metadata) for item in admitted],
-        EPGService(db), TVChannelService(db))
+    staged = [(item.entry.channel_id, item.entry.name, item.entry.metadata) for item in admitted]
+    # With the channel rules tree switched on, the tree assigns channels after the import (ImportPipeline.apply)
+    # and the guide step no longer creates or assigns any.
+    assigned = staged if _automatic_tree(db) is not None else M3UService().auto_create_tv_channels_from_epg(
+        db, staged, EPGService(db), TVChannelService(db))
     # The guide step returns the same metadata dicts it was given, in input
     # order, so each assignment is matched back to its entry by identity.
     pending = iter(admitted)

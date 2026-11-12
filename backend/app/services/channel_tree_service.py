@@ -327,6 +327,33 @@ class ChannelTreeService:
                after={"epg_id": epg_id, "epg_source_id": source_id})
         tv.epg_id, tv.epg_source_id = epg_id, source_id
 
+    def stream_ids(self, scope: str) -> Optional[list[str]]:
+        """``all`` (None: every stream) or ``unassigned`` (streams without a channel)."""
+        if scope == "all":
+            return None
+        if scope == "unassigned":
+            return [sid for (sid,) in self.db.query(AcestreamChannel.id)
+                    .filter(AcestreamChannel.tv_channel_id.is_(None)).all()]
+        raise TreeRunError("scope is «all» or «unassigned»")
+
+    def preview(self, scope: str = "all", root: Optional[dict[str, Any]] = None,
+                limit: int = 500) -> Optional[dict[str, Any]]:
+        """What ``apply`` would do, computed by applying inside a savepoint and rolling it back."""
+        ids = self.stream_ids(scope)
+        nested = self.db.begin_nested()
+        try:
+            run = self.apply(ids, trigger="preview", root=root)
+            if run is None:
+                return None
+            names = {tv.id: tv.name for tv in self.db.query(TVChannel.id, TVChannel.name).all()}
+            changes = [{"kind": c.kind, "stream_id": c.stream_id, "tv_channel_id": c.tv_channel_id,
+                        "channel": names.get(c.tv_channel_id), "before": c.before, "after": c.after}
+                       for c in self.db.query(ChannelTreeChange).filter(ChannelTreeChange.run_id == run.id)
+                       .order_by(ChannelTreeChange.id).limit(limit).all()]
+            return {"stats": dict(run.stats), "changes": changes}
+        finally:
+            nested.rollback()
+
     # ------------------------------------------------------------ undo
     def runs(self, limit: int = 20) -> list[ChannelTreeRun]:
         return self.db.query(ChannelTreeRun).order_by(ChannelTreeRun.id.desc()).limit(limit).all()

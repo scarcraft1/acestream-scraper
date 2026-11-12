@@ -3550,6 +3550,233 @@
         "title": "ChannelStatusSummary",
         "type": "object"
       },
+      "ChannelTreeChangeOut": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          },
+          "tv_channel_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tv Channel Id"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ChannelTreeChangeOut",
+        "type": "object"
+      },
+      "ChannelTreePreview": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelTreeChangeOut"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "stats": {
+            "additionalProperties": true,
+            "title": "Stats",
+            "type": "object"
+          }
+        },
+        "required": [
+          "stats",
+          "changes"
+        ],
+        "title": "ChannelTreePreview",
+        "type": "object"
+      },
+      "ChannelTreeRunOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "stats": {
+            "additionalProperties": true,
+            "title": "Stats",
+            "type": "object"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          },
+          "undone_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Undone At"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "trigger",
+          "stats"
+        ],
+        "title": "ChannelTreeRunOut",
+        "type": "object"
+      },
+      "ChannelTreeScope": {
+        "properties": {
+          "scope": {
+            "default": "all",
+            "description": "all: every stream; unassigned: streams without a channel",
+            "enum": [
+              "all",
+              "unassigned"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "title": "ChannelTreeScope",
+        "type": "object"
+      },
+      "ChannelTreeState": {
+        "properties": {
+          "auto": {
+            "default": false,
+            "description": "Imports put new streams without a channel through the tree",
+            "title": "Auto",
+            "type": "boolean"
+          },
+          "tree": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The stored rules tree, or null when there is none",
+            "title": "Tree"
+          }
+        },
+        "title": "ChannelTreeState",
+        "type": "object"
+      },
+      "ChannelTreeUndoOut": {
+        "properties": {
+          "channels_kept": {
+            "default": 0,
+            "title": "Channels Kept",
+            "type": "integer"
+          },
+          "channels_removed": {
+            "default": 0,
+            "title": "Channels Removed",
+            "type": "integer"
+          },
+          "streams": {
+            "default": 0,
+            "title": "Streams",
+            "type": "integer"
+          }
+        },
+        "title": "ChannelTreeUndoOut",
+        "type": "object"
+      },
+      "ChannelTreeUpdate": {
+        "properties": {
+          "auto": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Switch for imports; omitted keeps it",
+            "title": "Auto"
+          },
+          "tree": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rules tree to store; omitted keeps the stored one",
+            "title": "Tree"
+          }
+        },
+        "title": "ChannelTreeUpdate",
+        "type": "object"
+      },
       "CheckEngineConfig": {
         "properties": {
           "url": {
@@ -19278,6 +19505,215 @@
           "catalogues"
         ],
         "x-access-class": "management"
+      }
+    },
+    "/api/v1/channel-tree": {
+      "get": {
+        "operationId": "get_tree_api_v1_channel_tree_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Tree",
+        "tags": [
+          "channel-tree"
+        ]
+      },
+      "put": {
+        "operationId": "put_tree_api_v1_channel_tree_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelTreeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Tree",
+        "tags": [
+          "channel-tree"
+        ]
+      }
+    },
+    "/api/v1/channel-tree/apply": {
+      "post": {
+        "operationId": "apply_api_v1_channel_tree_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelTreeScope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeRunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply",
+        "tags": [
+          "channel-tree"
+        ]
+      }
+    },
+    "/api/v1/channel-tree/preview": {
+      "post": {
+        "operationId": "preview_api_v1_channel_tree_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelTreeScope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview",
+        "tags": [
+          "channel-tree"
+        ]
+      }
+    },
+    "/api/v1/channel-tree/runs": {
+      "get": {
+        "operationId": "runs_api_v1_channel_tree_runs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelTreeRunOut"
+                  },
+                  "title": "Response Runs Api V1 Channel Tree Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Runs",
+        "tags": [
+          "channel-tree"
+        ]
+      }
+    },
+    "/api/v1/channel-tree/runs/{run_id}/undo": {
+      "post": {
+        "operationId": "undo_api_v1_channel_tree_runs__run_id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeUndoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo",
+        "tags": [
+          "channel-tree"
+        ]
       }
     },
     "/api/v1/channels/": {

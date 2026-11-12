@@ -100,10 +100,80 @@ def js_replacement(repl: str) -> str:
     return "".join(out)
 
 
+try:  # Python 3.11+
+    from re import _parser as _sre_parse  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover
+    import sre_parse as _sre_parse  # type: ignore[no-redef]
+
+_REPEATS = {_sre_parse.MAX_REPEAT, _sre_parse.MIN_REPEAT, getattr(_sre_parse, "POSSESSIVE_REPEAT", None)} - {None}
+# A user pattern is matched against every stream on every import, so one that
+# can take exponential time would stall the import. The classic shape is a
+# repeat of varying length inside an unbounded one («(a+)+», «(a{1,3})+»); such a
+# pattern is treated like one that does not compile, and saving it is refused.
+_MAX_PATTERN = 500
+
+
+def _variable(items: Any) -> bool:
+    """Whether ``items`` holds a repeat that can take more than one length."""
+    for op, av in items:
+        if op in _REPEATS:
+            low, high, body = av
+            if low != high:
+                return True
+            if _variable(body):
+                return True
+        elif op == _sre_parse.SUBPATTERN:
+            if _variable(av[-1]):
+                return True
+        elif op == _sre_parse.BRANCH:
+            if any(_variable(b) for b in av[1]):
+                return True
+        elif op in (_sre_parse.ASSERT, _sre_parse.ASSERT_NOT):
+            if _variable(av[1]):
+                return True
+    return False
+
+
+def _nested_repeat(items: Any) -> bool:
+    for op, av in items:
+        if op in _REPEATS:
+            low, high, body = av
+            if (high == _sre_parse.MAXREPEAT or high > 16) and _variable(body):
+                return True
+            if _nested_repeat(body):
+                return True
+        elif op == _sre_parse.SUBPATTERN:
+            if _nested_repeat(av[-1]):
+                return True
+        elif op == _sre_parse.BRANCH:
+            if any(_nested_repeat(b) for b in av[1]):
+                return True
+        elif op in (_sre_parse.ASSERT, _sre_parse.ASSERT_NOT):
+            if _nested_repeat(av[1]):
+                return True
+    return False
+
+
+def regex_problem(pattern: str) -> Optional[str]:
+    """Why a user pattern is not used: ``None`` when it is fine."""
+    if len(pattern) > _MAX_PATTERN:
+        return f"longer than {_MAX_PATTERN} characters"
+    try:
+        parsed = _sre_parse.parse(pattern, re.IGNORECASE)
+    except (re.error, RecursionError, OverflowError):
+        return "does not compile"
+    if _nested_repeat(parsed):
+        return "a repeat inside another repeat can take too long"
+    return None
+
+
+@lru_cache(maxsize=4096)
 def _user_regex(pattern: str) -> Optional[re.Pattern[str]]:
+    if regex_problem(pattern):
+        return None
     try:
         return re.compile(pattern, re.IGNORECASE)
-    except re.error:
+    except (re.error, RecursionError, OverflowError):
         return None
 
 
@@ -247,11 +317,19 @@ def clean_name(name: str) -> str:
     return _TRAILING_SEPARATORS.sub("", text[start:])
 
 
-def fill_leaf(template: str, num: Optional[str], name: str) -> str:
+def fill_leaf(template: str, num: Optional[str], name: str) -> Optional[str]:
+    """The channel a leaf names; ``None`` when it uses «{nombre}» and no name is left.
+
+    A name that is only quality, codes, numbers or ornaments («1080p», «HD 2 --> LIST»)
+    would give an empty channel, or one called «2» gathering every such stream.
+    """
     out = fill(template, num)
     if NAME_PLACEHOLDER not in out:
         return out
-    return _SPACES.sub(" ", out.replace(NAME_PLACEHOLDER, clean_name(name))).strip()
+    clean = clean_name(name)
+    if not clean or clean.replace(" ", "").isdigit():
+        return None  # nothing, or a bare number («HD 2» leaves «2»); «+24» is a channel
+    return _SPACES.sub(" ", out.replace(NAME_PLACEHOLDER, clean)).strip()
 
 
 def _add_groups(st: TreeState, groups: Optional[str]) -> None:
@@ -320,10 +398,15 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
             if leaf.get("none"):
                 st.leaf = {"node": node["id"], "none": True, "channel": None, "guide": ""}
             else:
+                channel = fill_leaf(leaf.get("channel") or "", st.num, st.kodi)
+                if channel is None:
+                    # «{nombre}» with nothing left: the stream stays as it is, stopped at this leaf.
+                    st.rest_at = node["id"]
+                    return st
                 guide = leaf.get("guide") or ""
                 st.leaf = {
                     "node": node["id"],
-                    "channel": fill_leaf(leaf.get("channel") or "", st.num, st.kodi),
+                    "channel": channel,
                     # None: no guide, not even the one the streams carry; "": automatic.
                     "guide": None if leaf.get("noGuide") else fill(guide, st.num) if guide else "",
                 }
@@ -348,6 +431,102 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
                 st.rest_at = node["id"]
             return st
         node = entered
+
+
+FIELDS = frozenset({"name", "tvg", "group", "kind", "res", "list", "num", "cid"})
+_TEXT_KEYS = ("label", "group", "match")
+_STEP_TEXT = ("type", "pattern", "repl", "group", "mode", "value")
+
+
+def tree_problems(root: Any, limit: int = 20) -> list[str]:
+    """What keeps ``root`` from being walked; empty when it can be stored.
+
+    Only the shape: a pattern that does not compile is not a problem, the
+    condition simply never matches (the editor shows it in red). A pattern that
+    could take exponential time is, because the editor cannot tell.
+    """
+    problems: list[str] = []
+    seen: set[str] = set()
+
+    def text(value: Any) -> bool:
+        return value is None or isinstance(value, str)
+
+    def cond_problem(cond: Any, where: str) -> Optional[str]:
+        if not isinstance(cond, dict):
+            return f"{where}: a cond is an object"
+        if cond.get("field", "name") not in FIELDS:
+            return f"{where}: unknown field {cond.get('field')!r}"
+        if not (text(cond.get("op")) and text(cond.get("value"))):
+            return f"{where}: a cond's op and value are text"
+        if cond.get("op") == "regex":
+            return slow_pattern(cond.get("value"), where)
+        return None
+
+    def slow_pattern(pattern: Any, where: str) -> Optional[str]:
+        problem = regex_problem(pattern) if isinstance(pattern, str) and pattern else None
+        if problem and problem != "does not compile":
+            return f"{where}: pattern {pattern[:60]!r}: {problem}"
+        return None
+
+    def walk(node: Any, where: str, depth: int) -> None:
+        if len(problems) >= limit:
+            return
+        if depth > 64:
+            problems.append(f"{where}: the tree is more than 64 levels deep")
+            return
+        if not isinstance(node, dict):
+            problems.append(f"{where}: a node is an object")
+            return
+        nid = node.get("id")
+        if not isinstance(nid, str) or not nid:
+            problems.append(f"{where}: a node needs an id")
+        elif nid in seen:
+            problems.append(f"{where}: id {nid!r} is used twice")
+        else:
+            seen.add(nid)
+            where = nid
+        for key in _TEXT_KEYS:
+            if not text(node.get(key)):
+                problems.append(f"{where}: {key} is text")
+        conds = node.get("conds")
+        if conds is not None and not isinstance(conds, list):
+            problems.append(f"{where}: conds is a list")
+        for cond in conds if isinstance(conds, list) else []:
+            problem = cond_problem(cond, where)
+            if problem:
+                problems.append(problem)
+        steps = node.get("steps")
+        if steps is not None and not isinstance(steps, list):
+            problems.append(f"{where}: steps is a list")
+        for step in steps if isinstance(steps, list) else []:
+            if not isinstance(step, dict) or not all(text(step.get(k)) for k in _STEP_TEXT):
+                problems.append(f"{where}: a step is an object with text fields")
+                continue
+            problem = slow_pattern(step.get("pattern"), where)
+            if problem:
+                problems.append(problem)
+            ops = step.get("ops")
+            if ops is not None and not (isinstance(ops, list) and all(isinstance(o, str) for o in ops)):
+                problems.append(f"{where}: a step's ops are a list of text")
+            if step.get("cond"):
+                problem = cond_problem(step["cond"], where)
+                if problem:
+                    problems.append(problem)
+        leaf = node.get("leaf")
+        if leaf is not None and not (isinstance(leaf, dict) and all(
+                text(leaf.get(k)) for k in ("channel", "guide", "groups"))):
+            problems.append(f"{where}: a leaf is an object with text fields")
+        children = node.get("children")
+        if children is not None and not isinstance(children, list):
+            problems.append(f"{where}: children is a list")
+            return
+        for i, child in enumerate(children or []):
+            walk(child, f"{where} > child {i + 1}", depth + 1)
+
+    if not isinstance(root, dict) or not isinstance(root.get("children"), list):
+        return ["a tree is a node with a list of children"]
+    walk(root, "root", 0)
+    return problems[:limit]
 
 
 def norm(text: str) -> str:

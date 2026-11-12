@@ -243,3 +243,25 @@ def test_with_the_switch_off_an_import_does_not_run_the_tree(db_session):
     ImportPipeline.apply(db_session, ImportReference(SOURCE), [ImportEntry(A, "TAU")], "insert_only")
     assert db_session.get(AcestreamChannel, A).tv_channel_id is None
     assert db_session.query(ChannelTreeRun).count() == 0
+
+
+def test_the_api_stores_the_tree_previews_without_writing_applies_and_undoes(client, db_session):
+    assert client.post("/api/v1/channel-tree/preview", json={"scope": "all"}).json()["error"]["code"] == "CHANNEL_TREE_MISSING"
+    r = client.put("/api/v1/channel-tree", json={"tree": tree(leaf("Upsilon", "UPSILON", "Upsilon")), "auto": True})
+    assert r.status_code == 200 and r.json()["auto"] is True and r.json()["tree"]["id"] == "root"
+    stream(db_session, "u1", "UPSILON")
+    db_session.commit()
+
+    preview = client.post("/api/v1/channel-tree/preview", json={"scope": "unassigned"}).json()
+    assert preview["stats"]["created"] == 1
+    assert [c["kind"] for c in preview["changes"]] == ["create", "assign"]
+    db_session.expire_all()
+    assert db_session.query(TVChannel).count() == 0 and db_session.query(ChannelTreeRun).count() == 0
+
+    run = client.post("/api/v1/channel-tree/apply", json={"scope": "all"}).json()
+    assert run["trigger"] == "manual" and run["stats"]["moved"] == 1
+    assert [x["id"] for x in client.get("/api/v1/channel-tree/runs").json()] == [run["id"]]
+    undo = client.post(f"/api/v1/channel-tree/runs/{run['id']}/undo").json()
+    assert undo == {"streams": 1, "channels_removed": 1, "channels_kept": 0}
+    assert client.post(f"/api/v1/channel-tree/runs/{run['id']}/undo").status_code == 409
+    assert client.put("/api/v1/channel-tree", json={"tree": {"label": "bad"}}).status_code == 422

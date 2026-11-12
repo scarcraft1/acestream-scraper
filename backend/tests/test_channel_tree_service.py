@@ -264,6 +264,7 @@ def test_the_api_stores_the_tree_previews_without_writing_applies_and_undoes(cli
     undo = client.post(f"/api/v1/channel-tree/runs/{run['id']}/undo").json()
     assert undo == {"streams": 1, "channels_removed": 1, "channels_kept": 0}
     assert client.post(f"/api/v1/channel-tree/runs/{run['id']}/undo").status_code == 409
+    assert client.post("/api/v1/channel-tree/runs/999999/undo").json()["error"]["code"] == "CHANNEL_TREE_RUN_NOT_FOUND"
     assert client.put("/api/v1/channel-tree", json={"tree": {"label": "bad"}}).status_code == 422
 
 
@@ -337,3 +338,59 @@ def test_runs_past_the_undo_window_are_dropped_by_the_next_run(db_session):
     stream(db_session, "o2", "NEW ONE")
     new = service.apply(["o2"], root=tree(leaf("New", "NEW ONE", "New")))
     assert [r.id for r in service.runs()] == [new.id]
+
+
+def test_a_run_cannot_be_undone_while_a_later_run_changed_the_same_streams(db_session):
+    service = ChannelTreeService(db_session)
+    stream(db_session, "l1", "LAMBDA")
+    first = service.apply(root=tree(leaf("Lambda", "LAMBDA", "Lambda", group="G1")))
+    second = service.apply(root=tree(leaf("Lambda", "LAMBDA", "Lambda Two", group="G2")))
+    with pytest.raises(TreeRunError, match=f"run {second.id}"):
+        service.undo(first.id)
+    assert db_session.get(AcestreamChannel, "l1").tv_channel_id == by_name(db_session, "Lambda Two").id
+    service.undo(second.id)
+    service.undo(first.id)
+    assert db_session.get(AcestreamChannel, "l1").tv_channel_id is None
+    # An unrelated later run does not block.
+    stream(db_session, "m1", "MU")
+    third = service.apply(["l1"], root=tree(leaf("Lambda", "LAMBDA", "Lambda")))
+    service.apply(["m1"], root=tree(leaf("Mu", "MU", "Mu")))
+    service.undo(third.id)
+
+
+def test_a_moved_stream_loses_its_place_in_the_old_channel(db_session):
+    old = channel(db_session, "Nu Old")
+    row = stream(db_session, "n1", "NU", tv=old.id)
+    row.stream_order = 3
+    run = ChannelTreeService(db_session).apply(root=tree(leaf("Nu", "NU", "Nu")))
+    assert row.stream_order is None
+    row.stream_order = 1
+    ChannelTreeService(db_session).undo(run.id)
+    assert row.tv_channel_id == old.id and row.stream_order is None
+
+
+def test_undo_unlinks_recordings_of_a_removed_channel_and_spares_a_reused_id(db_session):
+    from datetime import datetime, timezone
+    from app.models.recordings import Recording
+    service = ChannelTreeService(db_session)
+    stream(db_session, "x1", "XI")
+    run = service.apply(root=tree(leaf("Xi", "XI", "Xi")))
+    xi = by_name(db_session, "Xi")
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    rec = Recording(tv_channel_id=xi.id, snapshot={}, start_time=now, end_time=now + timedelta(hours=1), timezone="UTC",
+                    idempotency_key="k1", request_hash="h1")
+    db_session.add(rec)
+    db_session.flush()
+    assert service.undo(run.id)["channels_removed"] == 1
+    assert rec.tv_channel_id is None
+
+    stream(db_session, "o1", "OMICRON")
+    run = service.apply(["o1"], root=tree(leaf("Omicron", "OMICRON", "Omicron")))
+    omicron = by_name(db_session, "Omicron")
+    reused_id = omicron.id
+    db_session.get(AcestreamChannel, "o1").tv_channel_id = None
+    db_session.delete(omicron)
+    db_session.flush()
+    other = channel(db_session, "Someone Else", id=reused_id)  # SQLite hands the id out again
+    service.undo(run.id)
+    assert db_session.get(TVChannel, other.id) is not None

@@ -21,9 +21,11 @@ This module turns its answers into TV channel assignments:
 - Streams the tree leaves in a node's remainder keep what they have.
 
 Every write is recorded with its previous value in ``channel_tree_changes`` so
-the run can be undone within ``UNDO_DAYS``. Undoing restores what the run
-replaced even if it was edited later, and removes the channels the run created
-when no stream is left on them.
+the run can be undone within ``UNDO_DAYS``, newest first: a run is refused while
+a later run, not undone, changed one of its streams or channels. Undoing restores
+what the run replaced (a moved stream also loses its place in the channel) and
+removes the channels the run created when no stream is left on them, unlinking
+their recordings as a normal delete does.
 
 Channel numbers are not touched: a created channel has none until numbering
 gives it one.
@@ -42,6 +44,7 @@ from sqlalchemy.orm import Session
 
 from app.models.models import (AcestreamChannel, ChannelTreeChange, ChannelTreeRun, EPGChannel, TVChannel,
                                _utcnow)
+from app.models.recordings import Recording
 from app.repositories.settings_repository import SettingsRepository
 from app.services import channel_tree as tree_engine
 from app.services.channel_group_service import split_groups
@@ -55,6 +58,10 @@ _PUBLISHER_CODE = re.compile(r"\s+[0-9a-f]{3,4}$", re.IGNORECASE)
 
 class TreeRunError(ValueError):
     """A run that cannot be undone, or a tree that cannot be stored."""
+
+
+class TreeRunNotFound(TreeRunError):
+    """No run with that id."""
 
 
 def list_label(source_url: Optional[str]) -> str:
@@ -259,6 +266,7 @@ class ChannelTreeService:
                 record("assign", stream_id=row.id, tv_channel_id=target,
                        before={"tv_channel_id": row.tv_channel_id}, after={"tv_channel_id": target})
                 row.tv_channel_id = target
+                row.stream_order = None  # its place belonged to the old channel
                 stats["moved"] += 1
         self.db.flush()
 
@@ -374,15 +382,35 @@ class ChannelTreeService:
     def runs(self, limit: int = 20) -> list[ChannelTreeRun]:
         return self.db.query(ChannelTreeRun).order_by(ChannelTreeRun.id.desc()).limit(limit).all()
 
+    def _later_runs_touching(self, run: ChannelTreeRun) -> list[int]:
+        """Later runs, not undone, that changed a stream or channel this run changed."""
+        streams = {c.stream_id for c in run.changes if c.stream_id is not None}
+        channels = {c.tv_channel_id for c in run.changes if c.tv_channel_id is not None}
+        if not streams and not channels:
+            return []
+        query = (self.db.query(ChannelTreeChange.run_id).join(ChannelTreeRun)
+                 .filter(ChannelTreeRun.id > run.id, ChannelTreeRun.undone_at.is_(None),
+                         ChannelTreeRun.trigger != "preview"))
+        touching = set()
+        for column, values in ((ChannelTreeChange.stream_id, streams), (ChannelTreeChange.tv_channel_id, channels)):
+            values = list(values)
+            for offset in range(0, len(values), 500):
+                touching.update(rid for (rid,) in query.filter(column.in_(values[offset:offset + 500])).distinct())
+        return sorted(touching)
+
     def undo(self, run_id: int) -> dict[str, int]:
         """Put back what run ``run_id`` replaced. Flushes, does not commit."""
         run = self.db.get(ChannelTreeRun, run_id)
         if run is None:
-            raise TreeRunError("no such run")
+            raise TreeRunNotFound("no such run")
         if run.undone_at is not None:
             raise TreeRunError("this run was already undone")
         if _utcnow() - run.created_at > timedelta(days=UNDO_DAYS):
             raise TreeRunError(f"runs can be undone for {UNDO_DAYS} days")
+        later = self._later_runs_touching(run)
+        if later:
+            raise TreeRunError("run " + ", ".join(map(str, later))
+                               + " changed the same streams or channels later; undo it first")
         result = Counter()
         created = []
         for change in reversed(run.changes):
@@ -395,6 +423,7 @@ class ChannelTreeService:
                 if previous is not None and self.db.get(TVChannel, previous) is None:
                     previous = None
                 row.tv_channel_id = previous
+                row.stream_order = None
                 result["streams"] += 1
                 continue
             tv = self.db.get(TVChannel, change.tv_channel_id) if change.tv_channel_id is not None else None
@@ -404,12 +433,15 @@ class ChannelTreeService:
                 tv.category = before.get("category")
             elif change.kind == "guide":
                 tv.epg_id, tv.epg_source_id = before.get("epg_id"), before.get("epg_source_id")
-            elif change.kind == "create":
-                created.append(tv)
+            elif change.kind == "create" and tv.name == (change.after or {}).get("name"):
+                created.append(tv)  # same id and name: not a later channel that got the id again
         self.db.flush()
         for tv in created:
             in_use = self.db.query(AcestreamChannel.id).filter(AcestreamChannel.tv_channel_id == tv.id).first()
             if in_use is None:
+                # As a normal delete does: a saved recording must not follow the id to another channel.
+                self.db.query(Recording).filter_by(tv_channel_id=tv.id).update(
+                    {"tv_channel_id": None, "revision": Recording.revision + 1}, synchronize_session="fetch")
                 self.db.delete(tv)
                 result["channels_removed"] += 1
             else:

@@ -3576,6 +3576,18 @@
             ],
             "title": "Before"
           },
+          "before_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Channel the stream leaves",
+            "title": "Before Channel"
+          },
           "channel": {
             "anyOf": [
               {
@@ -3587,9 +3599,30 @@
             ],
             "title": "Channel"
           },
+          "how": {
+            "default": "",
+            "description": "How the leaf's channel was found",
+            "enum": [
+              "",
+              "existing",
+              "publisher_code",
+              "new",
+              "ambiguous"
+            ],
+            "title": "How",
+            "type": "string"
+          },
           "kind": {
             "title": "Kind",
             "type": "string"
+          },
+          "path": {
+            "description": "Tree nodes the stream went through, below the root",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
           },
           "stream_id": {
             "anyOf": [
@@ -3601,6 +3634,18 @@
               }
             ],
             "title": "Stream Id"
+          },
+          "stream_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Name of the stream the change moves",
+            "title": "Stream Name"
           },
           "tv_channel_id": {
             "anyOf": [
@@ -3620,6 +3665,137 @@
         "title": "ChannelTreeChangeOut",
         "type": "object"
       },
+      "ChannelTreeExplain": {
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "current_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Channel"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "guide": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "description": "null: no guide; empty: automatic",
+            "title": "Guide"
+          },
+          "how": {
+            "default": "",
+            "enum": [
+              "",
+              "existing",
+              "publisher_code",
+              "new",
+              "ambiguous"
+            ],
+            "title": "How",
+            "type": "string"
+          },
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "channel",
+              "none",
+              "rest"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "stream_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Name"
+          }
+        },
+        "required": [
+          "stream_id",
+          "status"
+        ],
+        "title": "ChannelTreeExplain",
+        "type": "object"
+      },
+      "ChannelTreeExplainIn": {
+        "properties": {
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id"
+        ],
+        "title": "ChannelTreeExplainIn",
+        "type": "object"
+      },
+      "ChannelTreeNodeCount": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "streams": {
+            "title": "Streams",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "streams"
+        ],
+        "title": "ChannelTreeNodeCount",
+        "type": "object"
+      },
       "ChannelTreePreview": {
         "properties": {
           "changes": {
@@ -3629,10 +3805,41 @@
             "title": "Changes",
             "type": "array"
           },
+          "nodes": {
+            "description": "Streams that reached each node",
+            "items": {
+              "$ref": "#/components/schemas/ChannelTreeNodeCount"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
           "stats": {
             "additionalProperties": true,
             "title": "Stats",
             "type": "object"
+          },
+          "total_changes": {
+            "default": 0,
+            "title": "Total Changes",
+            "type": "integer"
+          },
+          "truncated": {
+            "default": false,
+            "description": "A list was cut at the limit",
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "unplaced": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelTreeUnplacedOut"
+            },
+            "title": "Unplaced",
+            "type": "array"
+          },
+          "unplaced_total": {
+            "default": 0,
+            "title": "Unplaced Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -3744,6 +3951,67 @@
           }
         },
         "title": "ChannelTreeUndoOut",
+        "type": "object"
+      },
+      "ChannelTreeUnplacedOut": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "path": {
+            "description": "Where the stream stopped",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "status": {
+            "description": "rest: no child matched; none: a leaf without channel; ambiguous: two channels answer",
+            "enum": [
+              "rest",
+              "none",
+              "ambiguous"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "stream_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Name"
+          }
+        },
+        "required": [
+          "stream_id",
+          "status"
+        ],
+        "title": "ChannelTreeUnplacedOut",
         "type": "object"
       },
       "ChannelTreeUpdate": {
@@ -19603,6 +19871,47 @@
           }
         },
         "summary": "Apply",
+        "tags": [
+          "channel-tree"
+        ]
+      }
+    },
+    "/api/v1/channel-tree/explain": {
+      "post": {
+        "operationId": "explain_api_v1_channel_tree_explain_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelTreeExplainIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeExplain"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Explain",
         "tags": [
           "channel-tree"
         ]

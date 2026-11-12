@@ -7,7 +7,7 @@ from app.config.database import get_db
 from app.repositories.settings_repository import SettingsRepository
 from app.schemas.channel_tree import (ChannelTreePreview, ChannelTreeRunOut, ChannelTreeScope, ChannelTreeState,
                                       ChannelTreeUndoOut, ChannelTreeUpdate)
-from app.services.channel_tree_service import AUTO_SETTING, ChannelTreeService, TreeRunError
+from app.services.channel_tree_service import AUTO_SETTING, ChannelTreeService, TreeRunError, TreeRunNotFound
 
 router = APIRouter()
 
@@ -67,8 +67,14 @@ def runs(db: Session = Depends(get_db)) -> list[ChannelTreeRunOut]:
 def undo(run_id: int, db: Session = Depends(get_db)) -> ChannelTreeUndoOut:
     try:
         result = ChannelTreeService(db).undo(run_id)
+    except TreeRunNotFound as exc:
+        db.rollback()
+        raise APIError("CHANNEL_TREE_RUN_NOT_FOUND", str(exc), 404) from exc
     except TreeRunError as exc:
         db.rollback()
         raise APIError("CHANNEL_TREE_UNDO", str(exc), 409) from exc
     db.commit()
+    if result.get("channels_removed"):
+        from app.services.recording_coordinator import recording_coordinator
+        recording_coordinator.request_refresh()
     return ChannelTreeUndoOut(**result)

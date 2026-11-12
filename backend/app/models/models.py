@@ -240,6 +240,35 @@ class ChannelGroup(Base):
     updated_at = Column(UtcDateTime(), nullable=False, default=_utcnow, onupdate=_utcnow)
 
 
+class ChannelTreeRun(Base):
+    """One application of the channel rules tree. Undoable for a week."""
+    __tablename__ = "channel_tree_runs"
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(UtcDateTime(), nullable=False, default=_utcnow, index=True)
+    # "auto" (new streams after an import) or "manual".
+    trigger = Column(String(16), nullable=False)
+    stats = Column(JSON, nullable=False, default=dict)
+    undone_at = Column(UtcDateTime(), nullable=True)
+    changes = relationship("ChannelTreeChange", back_populates="run", cascade="all, delete-orphan",
+                           order_by="ChannelTreeChange.id")
+
+
+class ChannelTreeChange(Base):
+    """What a run changed, with the value before, so the run can be undone."""
+    __tablename__ = "channel_tree_changes"
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("channel_tree_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    # "create" (a TV channel), "assign" (a stream's channel), "category" or "guide" (a channel's).
+    kind = Column(String(16), nullable=False)
+    stream_id = Column(String(255), nullable=True)
+    tv_channel_id = Column(Integer, nullable=True)
+    before = Column(JSON, nullable=True)
+    after = Column(JSON, nullable=True)
+    run = relationship("ChannelTreeRun", back_populates="changes")
+
+
 class EPGChannelIdentity(Base):
     """One logical channel, with source-qualified EPGChannel memberships."""
     __tablename__ = 'epg_channel_identities'

@@ -350,6 +350,90 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
         node = entered
 
 
+FIELDS = frozenset({"name", "tvg", "group", "kind", "res", "list", "num", "cid"})
+_TEXT_KEYS = ("label", "group", "match")
+_STEP_TEXT = ("type", "pattern", "repl", "group", "mode", "value")
+
+
+def tree_problems(root: Any, limit: int = 20) -> list[str]:
+    """What keeps ``root`` from being walked; empty when it can be stored.
+
+    Only the shape: a pattern that does not compile is not a problem, the
+    condition simply never matches (the editor shows it in red).
+    """
+    problems: list[str] = []
+    seen: set[str] = set()
+
+    def text(value: Any) -> bool:
+        return value is None or isinstance(value, str)
+
+    def cond_problem(cond: Any, where: str) -> Optional[str]:
+        if not isinstance(cond, dict):
+            return f"{where}: a cond is an object"
+        if cond.get("field", "name") not in FIELDS:
+            return f"{where}: unknown field {cond.get('field')!r}"
+        if not (text(cond.get("op")) and text(cond.get("value"))):
+            return f"{where}: a cond's op and value are text"
+        return None
+
+    def walk(node: Any, where: str, depth: int) -> None:
+        if len(problems) >= limit:
+            return
+        if depth > 64:
+            problems.append(f"{where}: the tree is more than 64 levels deep")
+            return
+        if not isinstance(node, dict):
+            problems.append(f"{where}: a node is an object")
+            return
+        nid = node.get("id")
+        if not isinstance(nid, str) or not nid:
+            problems.append(f"{where}: a node needs an id")
+        elif nid in seen:
+            problems.append(f"{where}: id {nid!r} is used twice")
+        else:
+            seen.add(nid)
+            where = nid
+        for key in _TEXT_KEYS:
+            if not text(node.get(key)):
+                problems.append(f"{where}: {key} is text")
+        conds = node.get("conds")
+        if conds is not None and not isinstance(conds, list):
+            problems.append(f"{where}: conds is a list")
+        for cond in conds if isinstance(conds, list) else []:
+            problem = cond_problem(cond, where)
+            if problem:
+                problems.append(problem)
+        steps = node.get("steps")
+        if steps is not None and not isinstance(steps, list):
+            problems.append(f"{where}: steps is a list")
+        for step in steps if isinstance(steps, list) else []:
+            if not isinstance(step, dict) or not all(text(step.get(k)) for k in _STEP_TEXT):
+                problems.append(f"{where}: a step is an object with text fields")
+                continue
+            ops = step.get("ops")
+            if ops is not None and not (isinstance(ops, list) and all(isinstance(o, str) for o in ops)):
+                problems.append(f"{where}: a step's ops are a list of text")
+            if step.get("cond"):
+                problem = cond_problem(step["cond"], where)
+                if problem:
+                    problems.append(problem)
+        leaf = node.get("leaf")
+        if leaf is not None and not (isinstance(leaf, dict) and all(
+                text(leaf.get(k)) for k in ("channel", "guide", "groups"))):
+            problems.append(f"{where}: a leaf is an object with text fields")
+        children = node.get("children")
+        if children is not None and not isinstance(children, list):
+            problems.append(f"{where}: children is a list")
+            return
+        for i, child in enumerate(children or []):
+            walk(child, f"{where} > child {i + 1}", depth + 1)
+
+    if not isinstance(root, dict) or not isinstance(root.get("children"), list):
+        return ["a tree is a node with a list of children"]
+    walk(root, "root", 0)
+    return problems[:limit]
+
+
 def norm(text: str) -> str:
     text = unicodedata.normalize("NFD", text)
     text = re.sub("[̀-ͯ]", "", text).lower()

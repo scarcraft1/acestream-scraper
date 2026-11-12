@@ -21,6 +21,7 @@ inside the caller's transaction, so rule edits and this import serialize.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, Literal, Optional
@@ -30,6 +31,8 @@ from sqlalchemy.orm import Session
 from app.models.models import AcestreamChannel
 from app.repositories.channel_repository import ChannelRepository
 from app.services.import_exclusion_service import ImportExclusionService, PolicySnapshot
+
+logger = logging.getLogger(__name__)
 
 ImportMode = Literal['snapshot', 'insert_only', 'manual']
 MODES: tuple[str, ...] = ('snapshot', 'insert_only', 'manual')
@@ -140,11 +143,23 @@ class ImportPipeline:
         tree = _automatic_tree(db)
         if tree is not None and mode != 'manual' and not getattr(reference, 'dry_run', False):
             # The one place that assigns channels on import: rows written now that have no channel,
-            # new or not. Assigned rows keep their channel; «apply to all» is a manual run.
+            # new or not. Assigned rows keep their channel; «apply to all» is a manual run. Rows the
+            # user switched off or protected are left alone, as the guide step did.
             db.flush()
-            unassigned = [row.id for row in result.channels if row.tv_channel_id is None]
+            ids = [row.id for row in result.channels]
+            excluded = ChannelRepository(db).get_import_assignment_exclusions(ids)
+            unassigned = [sid for sid in dict.fromkeys(ids) if sid not in excluded]
             if unassigned:
-                tree.apply(unassigned, trigger='auto')
+                # A tree that fails must not cost the import: its writes are undone, the import stays.
+                savepoint = db.begin_nested()
+                try:
+                    tree.apply(unassigned, trigger='auto')
+                except Exception:
+                    savepoint.rollback()
+                    logger.exception("Channel tree failed on import of %s; streams kept without a channel",
+                                     reference.source_url)
+                else:
+                    savepoint.commit()
         return result
 
 

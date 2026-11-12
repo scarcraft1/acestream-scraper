@@ -394,3 +394,36 @@ def test_undo_unlinks_recordings_of_a_removed_channel_and_spares_a_reused_id(db_
     other = channel(db_session, "Someone Else", id=reused_id)  # SQLite hands the id out again
     service.undo(run.id)
     assert db_session.get(TVChannel, other.id) is not None
+
+
+def test_the_preview_says_why_each_stream_moves_and_where_the_rest_stopped(db_session):
+    old = channel(db_session, "Pi Old")
+    channel(db_session, "Rho 3f2a")
+    stream(db_session, "p1", "PI", tv=old.id)
+    stream(db_session, "r1", "RHO")
+    stream(db_session, "s1", "SECTION STRAY")
+    root = tree(leaf("Pi leaf", "PI", "Pi"), leaf("Rho leaf", "RHO", "Rho"),
+                section("Section", "SECTION", leaf("Inner", "INNER", "Inner")))
+    out = ChannelTreeService(db_session).preview("all", root=root)
+    moves = {c["stream_id"]: c for c in out["changes"] if c["kind"] == "assign"}
+    assert moves["p1"]["stream_name"] == "PI" and moves["p1"]["before_channel"] == "Pi Old"
+    assert moves["p1"]["path"] == ["Pi leaf"] and moves["p1"]["how"] == "new"
+    assert moves["r1"]["channel"] == "Rho 3f2a" and moves["r1"]["how"] == "publisher_code"
+    assert out["unplaced"] == [{"stream_id": "s1", "stream_name": "SECTION STRAY", "status": "rest",
+                                "channel": None, "candidates": [], "path": ["Section"]}]
+    assert {n["label"]: n["streams"] for n in out["nodes"]} == {"root": 3, "Pi leaf": 1, "Rho leaf": 1, "Section": 1}
+    assert out["total_changes"] == len(out["changes"]) and out["truncated"] is False
+    cut = ChannelTreeService(db_session).preview("all", root=root, limit=1)
+    assert len(cut["changes"]) == 1 and cut["total_changes"] > 1 and cut["truncated"] is True
+
+
+def test_the_api_explains_one_stream_without_writing(client, db_session):
+    client.put("/api/v1/channel-tree", json={"tree": tree(leaf("Sigma leaf", "SIGMA", "Sigma"))})
+    stream(db_session, "g1", "SIGMA")
+    db_session.commit()
+    r = client.post("/api/v1/channel-tree/explain", json={"stream_id": "g1"}).json()
+    assert r["channel"] == "Sigma" and r["how"] == "new" and r["path"] == ["Sigma leaf"]
+    assert r["current_channel"] is None
+    db_session.expire_all()
+    assert db_session.query(TVChannel).count() == 0
+    assert client.post("/api/v1/channel-tree/explain", json={"stream_id": "nope"}).status_code == 404

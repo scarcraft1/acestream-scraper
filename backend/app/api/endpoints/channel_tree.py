@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from app.api.error_handlers import APIError
 from app.config.database import get_db
 from app.repositories.settings_repository import SettingsRepository
-from app.schemas.channel_tree import (ChannelTreePreview, ChannelTreeRunOut, ChannelTreeScope, ChannelTreeState,
-                                      ChannelTreeUndoOut, ChannelTreeUpdate)
+from app.schemas.channel_tree import (ChannelTreeExplain, ChannelTreeExplainIn, ChannelTreePreview,
+                                      ChannelTreeRunOut, ChannelTreeScope, ChannelTreeState, ChannelTreeUndoOut,
+                                      ChannelTreeUpdate)
 from app.services.channel_tree_service import AUTO_SETTING, ChannelTreeService, TreeRunError, TreeRunNotFound
 
 router = APIRouter()
@@ -45,6 +46,16 @@ def preview(body: ChannelTreeScope, db: Session = Depends(get_db)) -> ChannelTre
     _require_tree(service)
     result = service.preview(body.scope)
     return ChannelTreePreview(**(result or {"stats": {}, "changes": []}))
+
+
+@router.post("/explain", response_model=ChannelTreeExplain)
+def explain(body: ChannelTreeExplainIn, db: Session = Depends(get_db)) -> ChannelTreeExplain:
+    service = ChannelTreeService(db)
+    _require_tree(service)
+    result = service.explain(body.stream_id)
+    if result is None:
+        raise APIError("CHANNEL_TREE_STREAM_NOT_FOUND", "No stream with that id.", 404)
+    return ChannelTreeExplain(**result)
 
 
 @router.post("/apply", response_model=ChannelTreeRunOut)

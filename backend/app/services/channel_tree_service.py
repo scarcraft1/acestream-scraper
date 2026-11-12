@@ -99,6 +99,11 @@ class Placement:
     guide: Optional[str] = ""  # None: no guide; "": automatic
     groups: list[str] = field(default_factory=list)
     tvg: str = ""
+    # Ids of the nodes the stream went through, root first; the last one is the leaf or the
+    # node whose children it did not match.
+    path: list[str] = field(default_factory=list)
+    # How the leaf's channel was found: existing, publisher_code, new or ambiguous.
+    how: str = ""
 
 
 @dataclass
@@ -111,10 +116,28 @@ class Plan:
     ambiguous: dict[str, list[str]]
 
 
+def _labels(root: Optional[dict[str, Any]]) -> dict[str, str]:
+    """Node id -> label, in tree order (the id when a node has no label)."""
+    labels: dict[str, str] = {}
+
+    def walk(node: dict[str, Any]) -> None:
+        nid = node.get("id")
+        if isinstance(nid, str):
+            labels[nid] = node.get("label") or nid
+        for child in node.get("children") or []:
+            if isinstance(child, dict):
+                walk(child)
+
+    if isinstance(root, dict):
+        walk(root)
+    return labels
+
+
 class ChannelTreeService:
     def __init__(self, db: Session):
         self.db = db
         self.settings = SettingsRepository(db)
+        self.last_plan: Optional[Plan] = None  # what the last apply decided, for the preview
 
     # ------------------------------------------------------------ the tree
     def tree(self) -> Optional[dict[str, Any]]:
@@ -142,12 +165,12 @@ class ChannelTreeService:
         for row in rows:
             st = tree_engine.run(root, source_of(row))
             if st.leaf is None:
-                placements.append(Placement(row.id, "rest", tvg=row.tvg_id or ""))
+                placements.append(Placement(row.id, "rest", tvg=row.tvg_id or "", path=list(st.path)))
             elif st.leaf.get("none") or not st.leaf.get("channel"):
-                placements.append(Placement(row.id, "none", tvg=row.tvg_id or ""))
+                placements.append(Placement(row.id, "none", tvg=row.tvg_id or "", path=list(st.path)))
             else:
                 placements.append(Placement(row.id, "channel", st.leaf["channel"], st.leaf.get("guide", ""),
-                                            list(st.groups), row.tvg_id or ""))
+                                            list(st.groups), row.tvg_id or "", list(st.path)))
 
         existing = self.db.query(TVChannel.id, TVChannel.name).all()
         names = [name for _id, name in existing]
@@ -160,6 +183,7 @@ class ChannelTreeService:
                 aliases.setdefault(bare, name)
 
         targets: dict[str, Optional[int]] = {}
+        by_alias: set[str] = set()
         ambiguous: dict[str, list[str]] = {}
         new_forms: dict[str, list[Placement]] = defaultdict(list)
         for p in placements:
@@ -174,6 +198,7 @@ class ChannelTreeService:
                 alias = tree_engine.resolve(p.channel, list(aliases))
                 if alias["status"] == "ok":
                     hit = {"status": "ok", "name": aliases[alias["name"]]}
+                    by_alias.add(p.channel)
             if hit["status"] == "ok":
                 targets[p.channel] = id_of[hit["name"]]
             elif hit["status"] == "amb":
@@ -182,6 +207,10 @@ class ChannelTreeService:
                 targets[p.channel] = None
                 new_forms[tree_engine.norm(p.channel)].append(p)
 
+        for p in placements:
+            if p.status == "channel":
+                p.how = ("ambiguous" if p.channel in ambiguous else "new" if targets.get(p.channel) is None
+                         else "publisher_code" if p.channel in by_alias else "existing")
         new_names = {key: self._new_name(forms) for key, forms in new_forms.items()}
         return Plan(placements, targets, new_names, ambiguous)
 
@@ -215,6 +244,7 @@ class ChannelTreeService:
         if not rows:
             return None
         plan = self.plan(root, rows.values())
+        self.last_plan = plan
 
         if trigger != "preview":
             self._drop_expired_runs()
@@ -362,21 +392,68 @@ class ChannelTreeService:
 
     def preview(self, scope: str = "all", root: Optional[dict[str, Any]] = None,
                 limit: int = 500) -> Optional[dict[str, Any]]:
-        """What ``apply`` would do, computed by applying inside a savepoint and rolling it back."""
+        """What ``apply`` would do, computed by applying inside a savepoint and rolling it back.
+
+        Each change says why: the stream's name, the channel it leaves, the path through the
+        tree (node labels) and how the channel was found. Streams left without a channel are
+        listed with where they stopped, and every node counts the streams that reached it.
+        Lists are cut at ``limit`` and say so.
+        """
+        root = root if root is not None else self.tree()
         ids = self.stream_ids(scope)
         nested = self.db.begin_nested()
         try:
             run = self.apply(ids, trigger="preview", root=root)
             if run is None:
                 return None
+            plan = self.last_plan
+            labels = _labels(root)
+            placed = {p.stream_id: p for p in plan.placements}
+            stream_names: dict[str, str] = {}
+            wanted = list(placed)
+            for offset in range(0, len(wanted), 500):
+                stream_names.update(self.db.query(AcestreamChannel.id, AcestreamChannel.name)
+                                    .filter(AcestreamChannel.id.in_(wanted[offset:offset + 500])).all())
             names = {tv.id: tv.name for tv in self.db.query(TVChannel.id, TVChannel.name).all()}
-            changes = [{"kind": c.kind, "stream_id": c.stream_id, "tv_channel_id": c.tv_channel_id,
-                        "channel": names.get(c.tv_channel_id), "before": c.before, "after": c.after}
-                       for c in self.db.query(ChannelTreeChange).filter(ChannelTreeChange.run_id == run.id)
-                       .order_by(ChannelTreeChange.id).limit(limit).all()]
-            return {"stats": dict(run.stats), "changes": changes}
+            query = self.db.query(ChannelTreeChange).filter(ChannelTreeChange.run_id == run.id)
+            total = query.count()
+            changes = []
+            for c in query.order_by(ChannelTreeChange.id).limit(limit).all():
+                p = placed.get(c.stream_id)
+                before_id = (c.before or {}).get("tv_channel_id")
+                changes.append({"kind": c.kind, "stream_id": c.stream_id, "tv_channel_id": c.tv_channel_id,
+                                "channel": names.get(c.tv_channel_id), "before": c.before, "after": c.after,
+                                "stream_name": stream_names.get(c.stream_id),
+                                "before_channel": names.get(before_id) if before_id is not None else None,
+                                "path": [labels.get(n, n) for n in p.path[1:]] if p else [],
+                                "how": p.how if p else ""})
+            unplaced_all = [p for p in plan.placements
+                            if p.status in ("rest", "none") or p.how == "ambiguous"]
+            unplaced = [{"stream_id": p.stream_id, "stream_name": stream_names.get(p.stream_id),
+                         "status": "ambiguous" if p.how == "ambiguous" else p.status,
+                         "channel": p.channel, "candidates": plan.ambiguous.get(p.channel, []) if p.channel else [],
+                         "path": [labels.get(n, n) for n in p.path[1:]]}
+                        for p in unplaced_all[:limit]]
+            reached = Counter(n for p in plan.placements for n in p.path)
+            nodes = [{"id": n, "label": labels.get(n, n), "streams": reached[n]} for n in labels if reached[n]]
+            return {"stats": dict(run.stats), "changes": changes, "total_changes": total,
+                    "truncated": total > len(changes) or len(unplaced_all) > len(unplaced),
+                    "unplaced": unplaced, "unplaced_total": len(unplaced_all), "nodes": nodes}
         finally:
             nested.rollback()
+
+    def explain(self, stream_id: str, root: Optional[dict[str, Any]] = None) -> Optional[dict[str, Any]]:
+        """Where the tree sends one stream and why. Reads only."""
+        root = root if root is not None else self.tree()
+        row = self.db.get(AcestreamChannel, stream_id)
+        if root is None or row is None:
+            return None
+        p = self.plan(root, [row]).placements[0]
+        labels = _labels(root)
+        current = self.db.get(TVChannel, row.tv_channel_id) if row.tv_channel_id is not None else None
+        return {"stream_id": row.id, "stream_name": row.name, "status": p.status, "channel": p.channel,
+                "how": p.how, "path": [labels.get(n, n) for n in p.path[1:]], "groups": p.groups,
+                "guide": p.guide, "current_channel": current.name if current else None}
 
     # ------------------------------------------------------------ undo
     def runs(self, limit: int = 20) -> list[ChannelTreeRun]:

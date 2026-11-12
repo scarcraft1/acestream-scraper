@@ -279,3 +279,38 @@ def test_a_leaf_without_guide_ignores_the_one_the_streams_carry():
     assert T.run(root, {"name": "Demo 3", "tvg": "Other.3.xx"}).leaf["guide"] is None
     root = tree(node("rest", [], leaf={"channel": "Demo #", "guide": ""}))
     assert T.run(root, {"name": "Demo 3", "tvg": "Other.3.xx"}).leaf["guide"] == ""
+
+
+def test_a_pattern_that_can_backtrack_forever_never_matches_and_cannot_be_saved():
+    slow = "(a+)+$"
+    root = tree(
+        node("slow", [{"field": "name", "op": "regex", "value": slow}], leaf={"channel": "Never"}),
+        node("rest", [words("DEMO")], leaf={"channel": "Rest"}),
+        node("rep", steps=[{"type": "repl", "pattern": "(a{1,3})+!", "repl": ""}],
+             children=[node("x", [words("X")], leaf={"channel": "X"})]),
+    )
+    # Thirty letters and a mismatch take minutes with Python's re; refused, it is instant.
+    st = T.run(root, {"name": "demo " + "a" * 30 + "!"})
+    assert st.leaf["channel"] == "Rest"
+    problems = T.tree_problems(root)
+    assert any("slow" in p and "repeat inside another repeat" in p for p in problems)
+    assert any("rep" in p and "repeat inside another repeat" in p for p in problems)
+
+
+def test_bounded_and_single_length_repeats_are_kept():
+    for pattern in (r"\[\d{1,2}[.,]\d\*?\]\s*$", r"(\w+\s?)?", r"(ab){2,5}", r"(ab)+", r"^M\+ ?LALIGA"):
+        assert T.regex_problem(pattern) is None, pattern
+    assert T.regex_problem("(") == "does not compile"
+    assert T.regex_problem("a" * 501) is not None
+
+
+def test_a_name_template_with_no_name_left_leaves_the_stream_where_it_stopped():
+    root = tree(node("q", [words("LIST")], leaf={"channel": "{nombre} #"}))
+    assert T.run(root, {"name": "Demo Example 2 --> LIST"}).leaf["channel"] == "Demo Example 2"
+    # Only quality and the publisher's tail: no name, so neither «» nor a channel «2».
+    for bare in ("1080p --> LIST", "HD 2 --> LIST"):
+        st = T.run(root, {"name": bare})
+        assert st.leaf is None, (bare, st.leaf)
+        assert st.rest_at == "q"
+    # A sign keeps it a name: «+24» is a channel.
+    assert T.run(root, {"name": "+24 --> LIST"}).leaf["channel"] == "+24"

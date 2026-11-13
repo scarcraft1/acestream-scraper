@@ -21,6 +21,8 @@ export interface PlaylistFilters {
   /** ID of a named stream base URL entry (see baseUrlService) */
   base_url_id?: number;
   base_url?: string;
+  /** Device playlist: leaves out its disabled groups and channels */
+  list?: number;
 }
 
 /**
@@ -58,6 +60,7 @@ export const playlistService = {
       }
       if (filters.base_url) params.append('base_url', filters.base_url);
       if (filters.base_url_id !== undefined) params.append('base_url_id', String(filters.base_url_id));
+      if (filters.list !== undefined) params.append('list', String(filters.list));
     }
     const base = getPlaylistDownloadBaseUrl({
       dev: process.env.NODE_ENV === 'development',

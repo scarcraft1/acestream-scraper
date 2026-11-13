@@ -21,7 +21,7 @@ interface PlaylistOptionsFormProps {
 const PlaylistOptionsForm: React.FC<PlaylistOptionsFormProps> = ({ link, formatsOpen, onToggleFormats, formatsId = 'playlist-formats' }) => {
   const tUi = useUiText();
   const { filters, setFilters, search, setSearch, selectedBaseUrlId, setSelectedBaseUrlId, namedBaseUrls, loadingBaseUrls, baseUrlsError,
-    channelGroups, loadingGroups, selectedFormat, isRelay, managed, onlineHelp } = link;
+    channelGroups, loadingGroups, selectedFormat, isRelay, managed, onlineHelp, devicePlaylists } = link;
   const [showGroups, setShowGroups] = useState(false);
 
   const handleGroups = (key: 'include_groups' | 'exclude_groups') => (event: SelectChangeEvent<string[]>) => {
@@ -60,6 +60,28 @@ const PlaylistOptionsForm: React.FC<PlaylistOptionsFormProps> = ({ link, formats
     <Stack spacing={2}>
       <Typography variant="sectionTitle" component="h3">
         {tUi("Options")}</Typography>
+      {!managed && devicePlaylists.length ? (
+        <FormControl fullWidth size="small">
+          <InputLabel id={`${formatsId}-device-label`} shrink>{tUi("Device playlist")}</InputLabel>
+          <Select<number | ''>
+            labelId={`${formatsId}-device-label`}
+            displayEmpty
+            value={filters.list ?? ''}
+            renderValue={(value) => value === '' ? tUi("All channels") : devicePlaylists.find(entry => entry.id === value)?.name ?? tUi("All channels")}
+            onChange={(event) => {
+              const value = event.target.value;
+              setFilters((prev) => ({ ...prev, list: value === '' ? undefined : Number(value) }));
+            }}
+            input={<OutlinedInput label={tUi("Device playlist")} notched />}
+          >
+            <MenuItem value="">{tUi("All channels")}</MenuItem>
+            {devicePlaylists.map((entry) => (
+              <MenuItem key={entry.id} value={entry.id}>{tUi("{{value0}} · {{value1}} channels", { value0: entry.name, value1: entry.channels })}</MenuItem>
+            ))}
+          </Select>
+          <FormHelperText>{tUi("Leaves out the groups and channels disabled for that device.")}</FormHelperText>
+        </FormControl>
+      ) : null}
       <TextField size="small" fullWidth label={tUi("Search channels")} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tUi("Only include channels whose name contains…")} />
       <Box>
         <FormControlLabel

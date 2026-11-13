@@ -360,3 +360,11 @@ class PlaylistGuideCoverage(BaseModel):
     streams: int
     linked_streams: int
     guide_channels: int
+
+
+class UnassignedStreamsSummary(BaseModel):
+    """Active streams without a TV channel: an assignment rule is missing or failing."""
+    total: int
+    recent: int = Field(description="Of those, how many arrived in the last recent_days")
+    recent_days: int
+    examples: List[str] = Field(description="Names of the latest ones")

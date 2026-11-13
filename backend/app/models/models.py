@@ -241,6 +241,25 @@ class ChannelGroup(Base):
     updated_at = Column(UtcDateTime(), nullable=False, default=_utcnow, onupdate=_utcnow)
 
 
+class DevicePlaylist(Base):
+    """A playlist for one device: which channel groups and channels it leaves out.
+
+    A channel is left out when any of its groups is disabled here (a disabled
+    group disables its subgroups), unless the channel is enabled on its own.
+    """
+    __tablename__ = "device_playlists"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False)
+    # Access account that owns it; empty while the installation has no accounts.
+    owner_id = Column(String(64), nullable=True, index=True)
+    disabled_groups = Column(JSON, nullable=False, default=list)  # channel_groups ids; 0 = no group
+    enabled_channels = Column(JSON, nullable=False, default=list)  # tv_channels ids
+    disabled_channels = Column(JSON, nullable=False, default=list)  # tv_channels ids
+    created_at = Column(UtcDateTime(), nullable=False, default=_utcnow)
+    updated_at = Column(UtcDateTime(), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+
 class ChannelTreeRun(Base):
     """One application of the channel rules tree. Undoable for a week."""
     __tablename__ = "channel_tree_runs"

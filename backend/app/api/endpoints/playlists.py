@@ -10,6 +10,7 @@ from app.config.database import get_db
 from app.api.auth import authenticated_player_url
 from app.repositories.settings_repository import SettingsRepository
 from app.services.playlist_service import PlaylistService
+from app.services.device_playlist_service import DevicePlaylistNotFound, filter_for
 from app.schemas.channel import PlaylistGuideCoverage
 from app.services.public_url_service import resolve_public_base_url
 from app.services.task_service import task_service
@@ -47,11 +48,30 @@ def epg_url_for(request: Request, db: Session) -> str:
     return authenticated_player_url(request, f"{public}{EPG_XML_PATH}")
 
 
+#: ``?list=<id>`` picks a device playlist on every M3U route, the legacy ones too,
+#: so it is read from the request rather than declared per route.
+DEVICE_LIST_PARAMETER = {"parameters": [{
+    "name": "list", "in": "query", "required": False, "schema": {"type": "integer"},
+    "description": "Device playlist id: leaves out its disabled groups and channels.",
+}]}
+
+
+def device_list_filter(request: Request, db: Session):
+    raw = request.query_params.get("list")
+    if raw in (None, ""):
+        return None
+    try:
+        return filter_for(db, int(raw))
+    except (ValueError, DevicePlaylistNotFound):
+        raise HTTPException(status_code=404, detail="Device playlist not found") from None
+
+
 def playlist_service_for(request: Request, db: Session) -> PlaylistService:
     """A playlist service that knows the public address, which a
-    broadcaster's live channel links to (/live/...)."""
+    broadcaster's live channel links to (/live/...), and applies the device
+    playlist named by ``?list=``."""
     public = resolve_public_base_url(request, SettingsRepository(db)).url
-    return PlaylistService(db, live_base_url=public)
+    return PlaylistService(db, live_base_url=public, list_filter=device_list_filter(request, db))
 
 
 def trigger_url_scrape_refresh() -> None:
@@ -78,7 +98,7 @@ def guide_coverage(db: Session = Depends(get_db)):
     return PlaylistService(db).guide_coverage()
 
 
-@router.get("/m3u", response_class=PlainTextResponse)
+@router.get("/m3u", response_class=PlainTextResponse, openapi_extra=DEVICE_LIST_PARAMETER)
 async def get_m3u_playlist(
     request: Request,
     search: Optional[str] = None,
@@ -144,7 +164,7 @@ async def get_m3u_playlist(
         )
 
 
-@router.get("/playlists/m3u", response_class=PlainTextResponse)
+@router.get("/playlists/m3u", response_class=PlainTextResponse, openapi_extra=DEVICE_LIST_PARAMETER)
 async def get_m3u_playlist_compat(
     request: Request,
     search: Optional[str] = None,
@@ -187,7 +207,7 @@ async def get_m3u_playlist_compat(
     )
 
 
-@router.get("/tv-channels/m3u", response_class=PlainTextResponse)
+@router.get("/tv-channels/m3u", response_class=PlainTextResponse, openapi_extra=DEVICE_LIST_PARAMETER)
 async def get_tv_channels_playlist(
     request: Request,
     search: Optional[str] = None,
@@ -229,7 +249,7 @@ async def get_tv_channels_playlist(
         )
 
 
-@router.get("/all-streams/m3u", response_class=PlainTextResponse)
+@router.get("/all-streams/m3u", response_class=PlainTextResponse, openapi_extra=DEVICE_LIST_PARAMETER)
 async def get_all_streams_playlist(
     request: Request,
     search: Optional[str] = None,

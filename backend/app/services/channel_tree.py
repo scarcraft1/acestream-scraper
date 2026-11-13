@@ -100,10 +100,80 @@ def js_replacement(repl: str) -> str:
     return "".join(out)
 
 
+try:  # Python 3.11+
+    from re import _parser as _sre_parse  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover
+    import sre_parse as _sre_parse  # type: ignore[no-redef]
+
+_REPEATS = {_sre_parse.MAX_REPEAT, _sre_parse.MIN_REPEAT, getattr(_sre_parse, "POSSESSIVE_REPEAT", None)} - {None}
+# A user pattern is matched against every stream on every import, so one that
+# can take exponential time would stall the import. The classic shape is a
+# repeat of varying length inside an unbounded one («(a+)+», «(a{1,3})+»); such a
+# pattern is treated like one that does not compile, and saving it is refused.
+_MAX_PATTERN = 500
+
+
+def _variable(items: Any) -> bool:
+    """Whether ``items`` holds a repeat that can take more than one length."""
+    for op, av in items:
+        if op in _REPEATS:
+            low, high, body = av
+            if low != high:
+                return True
+            if _variable(body):
+                return True
+        elif op == _sre_parse.SUBPATTERN:
+            if _variable(av[-1]):
+                return True
+        elif op == _sre_parse.BRANCH:
+            if any(_variable(b) for b in av[1]):
+                return True
+        elif op in (_sre_parse.ASSERT, _sre_parse.ASSERT_NOT):
+            if _variable(av[1]):
+                return True
+    return False
+
+
+def _nested_repeat(items: Any) -> bool:
+    for op, av in items:
+        if op in _REPEATS:
+            low, high, body = av
+            if (high == _sre_parse.MAXREPEAT or high > 16) and _variable(body):
+                return True
+            if _nested_repeat(body):
+                return True
+        elif op == _sre_parse.SUBPATTERN:
+            if _nested_repeat(av[-1]):
+                return True
+        elif op == _sre_parse.BRANCH:
+            if any(_nested_repeat(b) for b in av[1]):
+                return True
+        elif op in (_sre_parse.ASSERT, _sre_parse.ASSERT_NOT):
+            if _nested_repeat(av[1]):
+                return True
+    return False
+
+
+def regex_problem(pattern: str) -> Optional[str]:
+    """Why a user pattern is not used: ``None`` when it is fine."""
+    if len(pattern) > _MAX_PATTERN:
+        return f"longer than {_MAX_PATTERN} characters"
+    try:
+        parsed = _sre_parse.parse(pattern, re.IGNORECASE)
+    except (re.error, RecursionError, OverflowError):
+        return "does not compile"
+    if _nested_repeat(parsed):
+        return "a repeat inside another repeat can take too long"
+    return None
+
+
+@lru_cache(maxsize=4096)
 def _user_regex(pattern: str) -> Optional[re.Pattern[str]]:
+    if regex_problem(pattern):
+        return None
     try:
         return re.compile(pattern, re.IGNORECASE)
-    except re.error:
+    except (re.error, RecursionError, OverflowError):
         return None
 
 
@@ -359,7 +429,8 @@ def tree_problems(root: Any, limit: int = 20) -> list[str]:
     """What keeps ``root`` from being walked; empty when it can be stored.
 
     Only the shape: a pattern that does not compile is not a problem, the
-    condition simply never matches (the editor shows it in red).
+    condition simply never matches (the editor shows it in red). A pattern that
+    could take exponential time is, because the editor cannot tell.
     """
     problems: list[str] = []
     seen: set[str] = set()
@@ -374,6 +445,14 @@ def tree_problems(root: Any, limit: int = 20) -> list[str]:
             return f"{where}: unknown field {cond.get('field')!r}"
         if not (text(cond.get("op")) and text(cond.get("value"))):
             return f"{where}: a cond's op and value are text"
+        if cond.get("op") == "regex":
+            return slow_pattern(cond.get("value"), where)
+        return None
+
+    def slow_pattern(pattern: Any, where: str) -> Optional[str]:
+        problem = regex_problem(pattern) if isinstance(pattern, str) and pattern else None
+        if problem and problem != "does not compile":
+            return f"{where}: pattern {pattern[:60]!r}: {problem}"
         return None
 
     def walk(node: Any, where: str, depth: int) -> None:
@@ -410,6 +489,9 @@ def tree_problems(root: Any, limit: int = 20) -> list[str]:
             if not isinstance(step, dict) or not all(text(step.get(k)) for k in _STEP_TEXT):
                 problems.append(f"{where}: a step is an object with text fields")
                 continue
+            problem = slow_pattern(step.get("pattern"), where)
+            if problem:
+                problems.append(problem)
             ops = step.get("ops")
             if ops is not None and not (isinstance(ops, list) and all(isinstance(o, str) for o in ops)):
                 problems.append(f"{where}: a step's ops are a list of text")

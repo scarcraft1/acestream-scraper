@@ -8,6 +8,7 @@ import ContentSection from '../components/layout/ContentSection';
 import PlaylistLinkPanel from '../components/playlist/PlaylistLinkPanel';
 import PlaylistOptionsForm from '../components/playlist/PlaylistOptionsForm';
 import { usePlaylistLink } from '../components/playlist/usePlaylistLink';
+import DevicePlaylists from '../components/playlist/DevicePlaylists';
 
 /** Build the M3U link, then download it or hand it to a player. */
 const Playlist: React.FC = () => {
@@ -31,6 +32,8 @@ const Playlist: React.FC = () => {
           </Grid>
         </Grid>
       </ContentSection>
+
+      {link.managed ? null : <ContentSection title="Device playlists"><DevicePlaylists /></ContentSection>}
 
       <Collapse in={formatsOpen} mountOnEnter unmountOnExit id="playlist-formats">
         <Alert severity="info" sx={{ mb: 2 }}>{tUi("Formats are shared with copied stream links and supported remote-player actions. Changing the default affects all links that use it.")}</Alert>

@@ -7,6 +7,8 @@ import { PlaylistFilters, playlistService, getAbsolutePlaylistUrl, buildPublicUr
 import type { StreamBaseUrl } from '../../services/baseUrlService';
 import { useAccess } from '../access/AccessContext';
 import { accessService } from '../../services/accessService';
+import { useDevicePlaylists } from '../../hooks/useDevicePlaylists';
+import type { DevicePlaylist } from '../../services/devicePlaylistService';
 
 export type BaseUrlChoice = number | '' | 'tv-relay';
 
@@ -35,6 +37,8 @@ export interface PlaylistLink {
   linkError: string;
   createLink: () => Promise<void>;
   onlineHelp: string;
+  /** Playlists per device; the chosen one goes in the link as ?list=. */
+  devicePlaylists: DevicePlaylist[];
 }
 
 export function usePlaylistLink(): PlaylistLink {
@@ -50,6 +54,11 @@ export function usePlaylistLink(): PlaylistLink {
   const { data: namedBaseUrls = [], isLoading: loadingBaseUrls, isError: baseUrlsError } = useBaseUrls();
   const { data: publicUrl } = usePublicUrl();
   const { data: summary } = usePlaylistChannelSummary();
+  const { data: devicePlaylists = [], isSuccess: devicePlaylistsLoaded } = useDevicePlaylists({ enabled: !managed });
+
+  useEffect(() => {
+    if (devicePlaylistsLoaded && filters.list !== undefined && !devicePlaylists.some(entry => entry.id === filters.list)) setFilters(prev => ({ ...prev, list: undefined }));
+  }, [devicePlaylists, devicePlaylistsLoaded, filters.list]);
 
   useEffect(() => {
     if (!loadingBaseUrls && !baseUrlsError && selectedBaseUrlId !== '' && selectedBaseUrlId !== 'tv-relay' && !namedBaseUrls.some(entry => entry.id === selectedBaseUrlId)) setSelectedBaseUrlId('');
@@ -67,6 +76,8 @@ export function usePlaylistLink(): PlaylistLink {
     per_source: isRelay && filters.per_source ? true : undefined,
     base_url_id: typeof selectedBaseUrlId === 'number' ? selectedBaseUrlId : undefined,
     base_url: selectedBaseUrlId === 'tv-relay' ? relayPattern : undefined,
+    // Accounts serve their own playlist, which does not read ?list= yet.
+    list: managed ? undefined : filters.list,
   };
   const appendCredential = (url: string) => playbackToken ? `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(playbackToken)}` : url;
   const playlistUrl = appendCredential(playlistService.getPlaylistDownloadUrl(effectiveFilters));
@@ -83,5 +94,5 @@ export function usePlaylistLink(): PlaylistLink {
 
   return { managed, filters, setFilters, search, setSearch, selectedBaseUrlId, setSelectedBaseUrlId, namedBaseUrls, loadingBaseUrls,
     baseUrlsError: Boolean(baseUrlsError), channelGroups, loadingGroups, selectedFormat, isRelay, playlistUrl, absolutePlaylistUrl,
-    playbackToken, creatingLink, linkError, createLink, onlineHelp };
+    playbackToken, creatingLink, linkError, createLink, onlineHelp, devicePlaylists };
 }

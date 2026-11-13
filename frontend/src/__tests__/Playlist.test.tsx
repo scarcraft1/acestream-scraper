@@ -13,6 +13,14 @@ import * as systemHooks from '../hooks/useSystemServices';
 jest.mock('../hooks/usePlaylists');
 jest.mock('../hooks/useBaseUrls');
 jest.mock('../hooks/useSystemServices');
+jest.mock('../hooks/useTVChannels', () => ({ useTVChannelCatalog: () => ({ data: [] }) }));
+jest.mock('../services/devicePlaylistService', () => ({
+  devicePlaylistService: {
+    list: jest.fn().mockResolvedValue([{ id: 4, name: 'Example room', owner_id: null, disabled_groups: [], enabled_channels: [],
+      disabled_channels: [], created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', channels: 3, total: 4, tabs: 2 }]),
+    groups: jest.fn().mockResolvedValue([]),
+  },
+}));
 
 const urlField = () => screen.getByRole('textbox', { name: 'Playlist URL' }) as HTMLInputElement;
 
@@ -59,6 +67,13 @@ describe('Playlist page', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Only online channels' }));
     expect(urlField().value).toContain('only_online=true');
+  });
+
+  it('puts the chosen device playlist in the link', async () => {
+    renderPage();
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Device playlist' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Example room · 3 channels' }));
+    await waitFor(() => expect(urlField().value).toContain('list=4'));
   });
 
   it('keeps group filters collapsed until asked', () => {

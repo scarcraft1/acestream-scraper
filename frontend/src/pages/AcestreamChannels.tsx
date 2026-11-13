@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Snackbar, Stack, useMediaQuery, useTheme } from '@mui/material';
 import { Add, FileDownload, Refresh } from '@mui/icons-material';
 import type { GridSortModel } from '@mui/x-data-grid';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import ChannelTable from '../components/ChannelTable';
@@ -49,7 +49,9 @@ const AcestreamChannels: React.FC = () => {
 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
-  const [filters, setFilters] = useState<AcestreamChannelFilters>({});
+  const [searchParams] = useSearchParams();
+  // ?assigned=false opens the streams without a TV channel (the dashboard's notice links here).
+  const [filters, setFilters] = useState<AcestreamChannelFilters>(() => (searchParams.get('assigned') === 'false' ? { assigned: false } : {}));
   const [checkingStatus, setCheckingStatus] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<SnackbarNotice | null>(null);

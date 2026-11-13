@@ -14999,6 +14999,40 @@
         "title": "URLUpdate",
         "type": "object"
       },
+      "UnassignedStreamsSummary": {
+        "description": "Active streams without a TV channel: an assignment rule is missing or failing.",
+        "properties": {
+          "examples": {
+            "description": "Names of the latest ones",
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "recent": {
+            "description": "Of those, how many arrived in the last recent_days",
+            "title": "Recent",
+            "type": "integer"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "recent",
+          "recent_days",
+          "examples"
+        ],
+        "title": "UnassignedStreamsSummary",
+        "type": "object"
+      },
       "UpdateStatus": {
         "properties": {
           "current_version": {
@@ -16822,6 +16856,28 @@
           "channels"
         ],
         "x-access-class": "management"
+      }
+    },
+    "/api/v1/acestream-channels/unassigned_summary": {
+      "get": {
+        "description": "Active streams without a TV channel, for the dashboard's notice.",
+        "operationId": "get_unassigned_summary_api_v1_acestream_channels_unassigned_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnassignedStreamsSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Unassigned Summary",
+        "tags": [
+          "channels"
+        ]
       }
     },
     "/api/v1/acestream-channels/{acestreamchannel_id}": {
@@ -20634,6 +20690,28 @@
           "channels"
         ],
         "x-access-class": "management"
+      }
+    },
+    "/api/v1/channels/unassigned_summary": {
+      "get": {
+        "description": "Active streams without a TV channel, for the dashboard's notice.",
+        "operationId": "get_unassigned_summary_api_v1_channels_unassigned_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnassignedStreamsSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Unassigned Summary",
+        "tags": [
+          "channels"
+        ]
       }
     },
     "/api/v1/channels/{acestreamchannel_id}": {

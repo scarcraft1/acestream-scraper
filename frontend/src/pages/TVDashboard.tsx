@@ -6,6 +6,7 @@ import ContentSection from '../components/layout/ContentSection';
 import PageHeader from '../components/layout/PageHeader';
 import InventoryTotals from '../components/overview/InventoryTotals';
 import NextContentUpdates from '../components/overview/NextContentUpdates';
+import UnassignedStreamsNotice from '../components/overview/UnassignedStreamsNotice';
 import UpcomingEvents from '../components/overview/UpcomingEvents';
 import ActiveStreamsList from '../components/player/ActiveStreamsList';
 import PlaylistDialog from '../components/playlist/PlaylistDialog';
@@ -65,6 +66,7 @@ export default function TVDashboard({ embedded = false }: { embedded?: boolean }
       <Button component={RouterLink} to="/epg">{tUi("Guide")}</Button>
     </Stack>}>
       <Stack spacing={2}>
+        <UnassignedStreamsNotice />
         {stats.error ? <Alert severity="warning" action={<Button color="inherit" onClick={() => void stats.refetch()}>{tUi("Retry inventory")}</Button>}>{tUi("Could not load streams and guide:")}{' '}{getErrorMessage(stats.error)}</Alert> : !stats.data ? <Typography role="status">{tUi("Loading streams and guide…")}</Typography> : null}
         {tvStats.error ? <Alert severity="warning" action={<Button color="inherit" onClick={() => void tvStats.refetch()}>{tUi("Retry channels")}</Button>}>{tUi("Could not load TV channels:")}{' '}{getErrorMessage(tvStats.error)}</Alert> : !tvStats.data ? <Typography role="status">{tUi("Loading TV channels…")}</Typography> : null}
         {(stats.data && !stats.error) || (tvStats.data && !tvStats.error) ? <InventoryTotals stats={stats.error ? undefined : stats.data} tvStats={tvStats.error ? undefined : tvStats.data} /> : null}

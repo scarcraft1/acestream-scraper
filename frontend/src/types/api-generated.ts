@@ -273,6 +273,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acestream-channels/unassigned_summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Unassigned Summary
+         * @description Active streams without a TV channel, for the dashboard's notice.
+         */
+        get: operations["get_unassigned_summary_api_v1_acestream_channels_unassigned_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/acestream-channels/{acestreamchannel_id}": {
         parameters: {
             query?: never;
@@ -1092,6 +1112,26 @@ export interface paths {
          * @description Get summary of channel statuses.
          */
         get: operations["get_channel_status_summary_api_v1_channels_status_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channels/unassigned_summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Unassigned Summary
+         * @description Active streams without a TV channel, for the dashboard's notice.
+         */
+        get: operations["get_unassigned_summary_api_v1_channels_unassigned_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10775,6 +10815,26 @@ export interface components {
             /** Url Type */
             url_type?: string | null;
         };
+        /**
+         * UnassignedStreamsSummary
+         * @description Active streams without a TV channel: an assignment rule is missing or failing.
+         */
+        UnassignedStreamsSummary: {
+            /**
+             * Examples
+             * @description Names of the latest ones
+             */
+            examples: string[];
+            /**
+             * Recent
+             * @description Of those, how many arrived in the last recent_days
+             */
+            recent: number;
+            /** Recent Days */
+            recent_days: number;
+            /** Total */
+            total: number;
+        };
         /** UpdateStatus */
         UpdateStatus: {
             /** Current Version */
@@ -11592,6 +11652,26 @@ export interface operations {
             422: components["responses"]["ApplicationProblem422"];
             500: components["responses"]["ApplicationProblem500"];
             503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    get_unassigned_summary_api_v1_acestream_channels_unassigned_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnassignedStreamsSummary"];
+                };
+            };
         };
     };
     get_acestream_channel_api_v1_acestream_channels__acestreamchannel_id__get: {
@@ -13478,6 +13558,26 @@ export interface operations {
             422: components["responses"]["ApplicationProblem422"];
             500: components["responses"]["ApplicationProblem500"];
             503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    get_unassigned_summary_api_v1_channels_unassigned_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnassignedStreamsSummary"];
+                };
+            };
         };
     };
     get_acestream_channel_api_v1_channels__acestreamchannel_id__get: {

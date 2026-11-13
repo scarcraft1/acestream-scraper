@@ -91,6 +91,8 @@ export interface AcestreamChannelFilters {
   active_only?: boolean; // Added to support backend override
 }
 
+export type UnassignedStreamsSummary = components['schemas']['UnassignedStreamsSummary'];
+
 export interface ChannelStatusSummary {
   total_channels: number;
   active_channels: number;
@@ -140,6 +142,12 @@ function parseBooleanFilter(value: unknown): boolean | undefined {
  */
 const acestreamChannelService = {
   /** Online/offline/unknown counts across all channels. */
+  /** Active streams without a TV channel: an assignment rule is missing or failing. */
+  getUnassignedSummary: async (): Promise<UnassignedStreamsSummary> => {
+    const { data } = await apiClient.get<UnassignedStreamsSummary>('/v1/channels/unassigned_summary');
+    return data;
+  },
+
   getStatusSummary: async (): Promise<ChannelStatusSummary> => {
     const { data } = await apiClient.get<ChannelStatusSummary>('/v1/channels/status_summary');
     return data;

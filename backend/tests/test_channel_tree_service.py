@@ -452,3 +452,51 @@ def test_leaf_guides_that_disagree_or_are_not_loaded_are_warnings(db_session):
     assert by_name(db_session, "Upsilon").epg_id is None and by_name(db_session, "Phi").epg_id is None
     kinds = {(w["channel"], w["kind"]) for w in run.stats["warnings"]}
     assert kinds == {("Upsilon", "leaf_guides_disagree"), ("Phi", "leaf_guide_not_loaded")}
+
+
+def test_saving_the_tree_and_its_switch_leaves_the_commit_to_the_caller(db_session):
+    service = ChannelTreeService(db_session)
+    service.save_tree(tree(leaf("Chi", "CHI", "Chi")))
+    service.set_auto(True)
+    assert service.tree() is not None and service.auto_enabled()
+    db_session.rollback()
+    # Nothing was committed on the way: an error later in the same request loses both.
+    assert service.tree() is None
+    assert not service.auto_enabled()
+
+
+def test_a_bad_tree_in_a_put_does_not_switch_automatic_runs_on(client):
+    r = client.put("/api/v1/channel-tree", json={"tree": {"label": "bad"}, "auto": True})
+    assert r.status_code == 422
+    assert client.get("/api/v1/channel-tree").json() == {"tree": None, "auto": False}
+
+
+def test_apply_undo_and_save_take_the_import_claim_before_reading(db_session):
+    from sqlalchemy import event
+    service = ChannelTreeService(db_session)
+    statements: list[str] = []
+
+    def seen(conn, cursor, statement, *args):
+        statements.append(statement.lstrip().split()[0].upper() + " " + statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", seen)
+    try:
+        service.save_tree(tree(leaf("Psi", "PSI", "Psi")))
+        stream(db_session, "s1", "PSI")
+        statements.clear()
+        run = service.apply(["s1"])
+        apply_sql = list(statements)
+        statements.clear()
+        service.undo(run.id)
+        undo_sql = list(statements)
+    finally:
+        event.remove(engine, "before_cursor_execute", seen)
+
+    def claim_first(sql, table):
+        claim = next(i for i, s in enumerate(sql) if s.startswith("UPDATE") and "import_policy_state" in s)
+        read = next(i for i, s in enumerate(sql) if s.startswith("SELECT") and table in s)
+        return claim < read
+
+    assert claim_first(apply_sql, "acestream_channels")
+    assert claim_first(undo_sql, "channel_tree_runs")

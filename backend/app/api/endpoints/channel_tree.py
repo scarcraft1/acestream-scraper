@@ -4,11 +4,10 @@ from sqlalchemy.orm import Session
 
 from app.api.error_handlers import APIError
 from app.config.database import get_db
-from app.repositories.settings_repository import SettingsRepository
 from app.schemas.channel_tree import (ChannelTreeExplain, ChannelTreeExplainIn, ChannelTreePreview,
                                       ChannelTreeRunOut, ChannelTreeScope, ChannelTreeState, ChannelTreeUndoOut,
                                       ChannelTreeUpdate)
-from app.services.channel_tree_service import AUTO_SETTING, ChannelTreeService, TreeRunError, TreeRunNotFound
+from app.services.channel_tree_service import ChannelTreeService, TreeRunError, TreeRunNotFound
 
 router = APIRouter()
 
@@ -28,10 +27,12 @@ def put_tree(body: ChannelTreeUpdate, db: Session = Depends(get_db)) -> ChannelT
     try:
         if body.tree is not None:
             service.save_tree(body.tree)
+        if body.auto is not None:
+            service.set_auto(body.auto)
     except TreeRunError as exc:
+        db.rollback()
         raise APIError("CHANNEL_TREE_INVALID", str(exc), 422) from exc
-    if body.auto is not None:
-        SettingsRepository(db).set_setting(AUTO_SETTING, "true" if body.auto else "false")
+    db.commit()  # the tree and its switch together, or neither
     return _state(service)
 
 

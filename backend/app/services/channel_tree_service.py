@@ -42,9 +42,10 @@ from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
 
-from app.models.models import (AcestreamChannel, ChannelTreeChange, ChannelTreeRun, EPGChannel, TVChannel,
-                               _utcnow)
+from app.models.models import (AcestreamChannel, ChannelTreeChange, ChannelTreeRun, EPGChannel, Setting,
+                               TVChannel, _utcnow)
 from app.models.recordings import Recording
+from app.repositories.import_exclusion_repository import ImportExclusionRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.services import channel_tree as tree_engine
 from app.services.channel_group_service import split_groups
@@ -151,10 +152,33 @@ class ChannelTreeService:
         return root if isinstance(root, dict) else None
 
     def save_tree(self, root: dict[str, Any]) -> None:
+        """Store the tree. Flushes, does not commit."""
         problems = tree_engine.tree_problems(root)
         if problems:
             raise TreeRunError("; ".join(problems))
-        self.settings.set_setting(TREE_SETTING, json.dumps(root, ensure_ascii=False))
+        self._claim()
+        self._store(TREE_SETTING, json.dumps(root, ensure_ascii=False))
+
+    def set_auto(self, enabled: bool) -> None:
+        """Switch automatic runs on import. Flushes, does not commit."""
+        self._claim()
+        self._store(AUTO_SETTING, "true" if enabled else "false")
+
+    def _claim(self) -> None:
+        # The import pipeline takes this same write claim before it admits rows and runs the
+        # tree, so an apply, an undo or a tree being saved waits for an import in flight (and
+        # the other way round) instead of working from rows the import is about to change.
+        ImportExclusionRepository(self.db).claim()
+
+    def _store(self, key: str, value: str) -> None:
+        # SettingsRepository.set_setting commits on its own: the caller commits once instead,
+        # so a tree and its switch are saved together and the claim lasts until then.
+        row = self.db.query(Setting).filter(Setting.key == key).first()
+        if row is None:
+            self.db.add(Setting(key=key, value=value))
+        else:
+            row.value = value
+        self.db.flush()
 
     def auto_enabled(self) -> bool:
         return str(self.settings.get_setting(AUTO_SETTING, "false")).strip().lower() in ("1", "true", "yes", "on")
@@ -230,6 +254,7 @@ class ChannelTreeService:
         Returns the run, or None when there is no tree or nothing to look at. An automatic run
         that changes nothing is not kept and also returns None.
         """
+        self._claim()
         root = root if root is not None else self.tree()
         if root is None:
             return None
@@ -477,6 +502,7 @@ class ChannelTreeService:
 
     def undo(self, run_id: int) -> dict[str, int]:
         """Put back what run ``run_id`` replaced. Flushes, does not commit."""
+        self._claim()
         run = self.db.get(ChannelTreeRun, run_id)
         if run is None:
             raise TreeRunNotFound("no such run")

@@ -317,11 +317,19 @@ def clean_name(name: str) -> str:
     return _TRAILING_SEPARATORS.sub("", text[start:])
 
 
-def fill_leaf(template: str, num: Optional[str], name: str) -> str:
+def fill_leaf(template: str, num: Optional[str], name: str) -> Optional[str]:
+    """The channel a leaf names; ``None`` when it uses «{nombre}» and no name is left.
+
+    A name that is only quality, codes, numbers or ornaments («1080p», «HD 2 --> LIST»)
+    would give an empty channel, or one called «2» gathering every such stream.
+    """
     out = fill(template, num)
     if NAME_PLACEHOLDER not in out:
         return out
-    return _SPACES.sub(" ", out.replace(NAME_PLACEHOLDER, clean_name(name))).strip()
+    clean = clean_name(name)
+    if not clean or clean.replace(" ", "").isdigit():
+        return None  # nothing, or a bare number («HD 2» leaves «2»); «+24» is a channel
+    return _SPACES.sub(" ", out.replace(NAME_PLACEHOLDER, clean)).strip()
 
 
 def _add_groups(st: TreeState, groups: Optional[str]) -> None:
@@ -390,10 +398,15 @@ def run(root: Node, source: dict[str, Any]) -> TreeState:
             if leaf.get("none"):
                 st.leaf = {"node": node["id"], "none": True, "channel": None, "guide": ""}
             else:
+                channel = fill_leaf(leaf.get("channel") or "", st.num, st.kodi)
+                if channel is None:
+                    # «{nombre}» with nothing left: the stream stays as it is, stopped at this leaf.
+                    st.rest_at = node["id"]
+                    return st
                 guide = leaf.get("guide") or ""
                 st.leaf = {
                     "node": node["id"],
-                    "channel": fill_leaf(leaf.get("channel") or "", st.num, st.kodi),
+                    "channel": channel,
                     # None: no guide, not even the one the streams carry; "": automatic.
                     "guide": None if leaf.get("noGuide") else fill(guide, st.num) if guide else "",
                 }

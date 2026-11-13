@@ -302,3 +302,15 @@ def test_bounded_and_single_length_repeats_are_kept():
         assert T.regex_problem(pattern) is None, pattern
     assert T.regex_problem("(") == "does not compile"
     assert T.regex_problem("a" * 501) is not None
+
+
+def test_a_name_template_with_no_name_left_leaves_the_stream_where_it_stopped():
+    root = tree(node("q", [words("LIST")], leaf={"channel": "{nombre} #"}))
+    assert T.run(root, {"name": "Demo Example 2 --> LIST"}).leaf["channel"] == "Demo Example 2"
+    # Only quality and the publisher's tail: no name, so neither «» nor a channel «2».
+    for bare in ("1080p --> LIST", "HD 2 --> LIST"):
+        st = T.run(root, {"name": bare})
+        assert st.leaf is None, (bare, st.leaf)
+        assert st.rest_at == "q"
+    # A sign keeps it a name: «+24» is a channel.
+    assert T.run(root, {"name": "+24 --> LIST"}).leaf["channel"] == "+24"

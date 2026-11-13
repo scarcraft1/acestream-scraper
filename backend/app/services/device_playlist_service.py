@@ -5,6 +5,9 @@ there (disabling a group disables its subgroups), unless the channel is enabled
 on its own; a channel disabled on its own is left out whatever its groups say.
 In the playlist a channel keeps only its enabled groups as tabs; one enabled on
 its own with every group disabled keeps all of them.
+
+Channels without a group count as one more group, ``UNGROUPED`` (id 0), so a
+kids' playlist can leave them out like any other.
 """
 
 from __future__ import annotations
@@ -15,6 +18,10 @@ from sqlalchemy.orm import Session
 
 from app.models.models import ChannelGroup, DevicePlaylist, TVChannel
 from app.services.channel_group_service import split_groups, sync_groups
+
+
+#: Pseudo-group id for TV channels without a category.
+UNGROUPED = 0
 
 
 class DevicePlaylistNotFound(LookupError):
@@ -55,7 +62,9 @@ def _join(category: str, names: list[str]) -> str:
 
 
 def build_filter(db: Session, playlist: DevicePlaylist) -> PlaylistFilter:
-    off = _disabled_names(db.query(ChannelGroup).all(), set(playlist.disabled_groups or []))
+    disabled_ids = set(playlist.disabled_groups or [])
+    off = _disabled_names(db.query(ChannelGroup).all(), disabled_ids)
+    ungrouped_off = UNGROUPED in disabled_ids
     enabled = set(playlist.enabled_channels or [])
     disabled = set(playlist.disabled_channels or [])
     result = PlaylistFilter()
@@ -66,6 +75,8 @@ def build_filter(db: Session, playlist: DevicePlaylist) -> PlaylistFilter:
             shown = True
         elif tv_id in disabled:
             shown = False
+        elif not own:
+            shown = not ungrouped_off
         else:
             shown = len(on) == len(own)
         if not shown:
@@ -103,18 +114,25 @@ def groups(db: Session) -> list[dict]:
     rows = sync_groups(db)
     db.commit()
     counts: dict[str, int] = {}
+    ungrouped = 0
     for (category,) in db.query(TVChannel.category):
-        for name in split_groups(category):
+        names = split_groups(category)
+        ungrouped += not names
+        for name in names:
             counts[name] = counts.get(name, 0) + 1
-    return [dict(id=g.id, name=g.name, parent_id=g.parent_id, position=g.position, channels=counts.get(g.name, 0))
-            for g in sorted(rows, key=lambda g: (g.parent_id is not None, g.position, g.id))]
+    result = [dict(id=g.id, name=g.name, parent_id=g.parent_id, position=g.position, channels=counts.get(g.name, 0))
+              for g in sorted(rows, key=lambda g: (g.parent_id is not None, g.position, g.id))]
+    if ungrouped:
+        last = max((g.position for g in rows if g.parent_id is None), default=-1) + 1
+        result.append(dict(id=UNGROUPED, name="No group", parent_id=None, position=last, channels=ungrouped))
+    return result
 
 
-def _clean(db: Session, values, model) -> list[int]:
+def _clean(db: Session, values, model, extra=()) -> list[int]:
     wanted = sorted({int(v) for v in values or []})
     if not wanted:
         return []
-    known = {row_id for (row_id,) in db.query(model.id).filter(model.id.in_(wanted))}
+    known = {row_id for (row_id,) in db.query(model.id).filter(model.id.in_(wanted))} | set(extra)
     return [v for v in wanted if v in known]
 
 
@@ -130,7 +148,7 @@ def save(db: Session, playlist: DevicePlaylist, *, name=None, owner_id=..., disa
     if owner_id is not ...:
         playlist.owner_id = owner_id or None
     if disabled_groups is not None:
-        playlist.disabled_groups = _clean(db, disabled_groups, ChannelGroup)
+        playlist.disabled_groups = _clean(db, disabled_groups, ChannelGroup, extra=(UNGROUPED,))
     if enabled_channels is not None:
         playlist.enabled_channels = _clean(db, enabled_channels, TVChannel)
     if disabled_channels is not None:

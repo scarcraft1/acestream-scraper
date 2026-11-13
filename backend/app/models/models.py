@@ -246,7 +246,7 @@ class DevicePlaylist(Base):
     name = Column(String(120), nullable=False)
     # Access account that owns it; empty while the installation has no accounts.
     owner_id = Column(String(64), nullable=True, index=True)
-    disabled_groups = Column(JSON, nullable=False, default=list)  # channel_groups ids
+    disabled_groups = Column(JSON, nullable=False, default=list)  # channel_groups ids; 0 = no group
     enabled_channels = Column(JSON, nullable=False, default=list)  # tv_channels ids
     disabled_channels = Column(JSON, nullable=False, default=list)  # tv_channels ids
     created_at = Column(UtcDateTime(), nullable=False, default=_utcnow)

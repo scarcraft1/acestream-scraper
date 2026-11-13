@@ -79,6 +79,19 @@ def scraping_completed(result: dict) -> bool:
     return notify("url_scraping.completed", title, message, result)
 
 
+def unassigned_streams(found: dict | None) -> bool:
+    """New streams without a TV channel: an assignment rule is missing or failing.
+
+    Stream names come from public lists and help find the missing rule; source
+    URLs and ids stay out.
+    """
+    if not found:
+        return False
+    title = "%s new source(s) without a TV channel" % found["new"]
+    message = "%s in total. Recent: %s" % (found["total"], ", ".join(found["examples"]))
+    return notify("streams.unassigned", title, message, found)
+
+
 def channel_status_completed(result: dict) -> bool:
     if result.get("message"):
         return False          # nothing was checked (no engine configured)

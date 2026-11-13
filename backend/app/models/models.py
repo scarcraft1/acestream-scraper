@@ -114,6 +114,8 @@ class AcestreamChannel(Base):
     tvg_name = Column(String(255), nullable=True)
     source_url = Column(String(2048), nullable=True)
     last_seen = Column(UtcDateTime(), default=_utcnow)
+    # When the stream first entered the catalogue; empty for streams older than the column.
+    added_at = Column(UtcDateTime(), nullable=True, default=_utcnow, index=True)
     is_active = Column(Boolean, default=True)
     is_online = Column(Boolean, nullable=True)
     network_status = Column(String(16), nullable=True)

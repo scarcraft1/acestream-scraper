@@ -15,6 +15,7 @@ from app.models.models import AcestreamChannel
 from app.services.acestreamchannel_service import AcestreamChannelService
 from app.services.channel_status_service import ChannelStatusService
 from app.schemas.channel import (
+    UnassignedStreamsSummary,
     ChannelSourceFilter,
     AcestreamChannelCreate,
     AcestreamChannelListResponse,
@@ -82,6 +83,13 @@ async def get_channel_status_summary(db: Session = Depends(get_db)):
     """
     status_service = ChannelStatusService(db)
     return status_service.get_channel_status_summary()
+
+
+@router.get("/unassigned_summary", response_model=UnassignedStreamsSummary)
+def get_unassigned_summary(db: Session = Depends(get_db)):
+    """Active streams without a TV channel, for the dashboard's notice."""
+    from app.services import unassigned_streams
+    return unassigned_streams.summary(db)
 
 
 @router.get('/sources', response_model=List[ChannelSourceFilter])

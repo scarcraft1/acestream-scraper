@@ -96,10 +96,10 @@ const PlaylistOptionsForm: React.FC<PlaylistOptionsFormProps> = ({ link, formats
       />
       <Box>
         <FormControlLabel
-          control={<Checkbox checked={filters.include_unassigned ?? false} disabled={filters.favorites_only} onChange={(e) => setFilters((prev) => ({ ...prev, include_unassigned: e.target.checked }))} />}
+          control={<Checkbox checked={filters.include_unassigned ?? false} disabled={filters.favorites_only || filters.list !== undefined} onChange={(e) => setFilters((prev) => ({ ...prev, include_unassigned: e.target.checked }))} />}
           label={tUi("Include unassigned streams at the end")}
         />
-        <FormHelperText sx={{ mt: -0.5, ml: 4 }}>{filters.favorites_only ? tUi("Unassigned streams have no favorite TV channel.") : tUi("Streams without a TV channel appear last. In relay playlists they use individual stream URLs, without channel failover.")}</FormHelperText>
+        <FormHelperText sx={{ mt: -0.5, ml: 4 }}>{filters.list !== undefined ? tUi("A device playlist lists TV channels only.") : filters.favorites_only ? tUi("Unassigned streams have no favorite TV channel.") : tUi("Streams without a TV channel appear last. In relay playlists they use individual stream URLs, without channel failover.")}</FormHelperText>
       </Box>
       <Box>
         <FormControlLabel

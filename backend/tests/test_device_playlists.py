@@ -128,6 +128,22 @@ def test_every_m3u_route_takes_the_list(client, db_session, catalogue, path):
     assert f'/tuner/channel/{t["Two"].id}.ts' not in text
 
 
+@pytest.mark.parametrize('path', ['/api/v1/playlists/m3u', '/api/v1/playlists/all-streams/m3u', '/playlists/m3u'])
+@pytest.mark.parametrize('base_url', [RELAY, 'acestream://{channel_id}'])
+def test_a_device_playlist_never_lists_streams_without_a_channel(client, db_session, catalogue, path, base_url):
+    from app.models.models import AcestreamChannel
+    loose = 'f' * 40
+    db_session.add(AcestreamChannel(id=loose, name='Example loose stream', group='Example publisher group',
+                                    source_url='https://example.test/list.m3u', is_active=True, is_online=True))
+    db_session.commit()
+    row = _playlist(db_session)
+    params = {'base_url': base_url, 'only_online': 'false', 'include_unassigned': 'true'}
+    assert loose in client.get(path, params=params).text
+    listed = client.get(path, params={**params, 'list': row.id}).text
+    assert loose not in listed and 'Example publisher group' not in listed
+    assert listed.count('#EXTINF') == 4
+
+
 @pytest.mark.parametrize('value', ['999', 'abc'])
 def test_an_unknown_list_is_404(client, catalogue, value):
     assert client.get('/api/v1/playlists/m3u', params={'list': value}).status_code == 404

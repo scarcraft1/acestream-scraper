@@ -72,7 +72,7 @@ export function usePlaylistLink(): PlaylistLink {
   const effectiveFilters: PlaylistFilters = {
     ...filters,
     search: search || undefined,
-    include_unassigned: !filters.favorites_only && filters.include_unassigned,
+    include_unassigned: !filters.favorites_only && filters.list === undefined && filters.include_unassigned,
     per_source: isRelay && filters.per_source ? true : undefined,
     base_url_id: typeof selectedBaseUrlId === 'number' ? selectedBaseUrlId : undefined,
     base_url: selectedBaseUrlId === 'tv-relay' ? relayPattern : undefined,

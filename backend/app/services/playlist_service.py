@@ -104,7 +104,10 @@ class PlaylistService:
             gone = unusable_ids(self.db, channels)
             channels = [channel for channel in channels if channel.id.lower() not in gone]
         if self.list_filter is not None:
-            channels = [channel for channel in channels if self.list_filter.shows(channel.tv_channel_id)]
+            # A device playlist lists TV channels only: a stream without one does not appear.
+            include_unassigned = False
+            channels = [channel for channel in channels if channel.tv_channel_id is not None
+                        and self.list_filter.shows(channel.tv_channel_id)]
 
         if "{tv_channel_id}" in base_url:
             tv_ids = {channel.tv_channel_id for channel in channels if channel.tv_channel_id is not None}
@@ -189,7 +192,7 @@ class PlaylistService:
         )
         lines.extend(entry_lines)
 
-        if include_unassigned:
+        if include_unassigned and self.list_filter is None:
             unassigned = self.channel_repository.get_unassigned_channels(search=search)
             lines.extend(self._unassigned_entries(unassigned, tv_channels, base_url, addpid, pid_counter, name_counts))
 

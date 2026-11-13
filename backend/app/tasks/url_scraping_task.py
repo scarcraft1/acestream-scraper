@@ -61,6 +61,12 @@ def run_url_scraping_task(saved_search_targets=None):
         result['saved_searches'] = run_reserved_batch(saved_search_targets or [], task_service.shutdown_event)
         logger.info("URL scraping task completed result=%s", result)
         notification_service.scraping_completed(result)
+        try:
+            from app.services import unassigned_streams
+            notification_service.unassigned_streams(unassigned_streams.new_since_notice(db))
+        except Exception as exc:  # a report never fails the import
+            db.rollback()
+            logger.warning("Unassigned streams report failed error=%s", type(exc).__name__)
         return result
     except Exception as exc:
         logger.exception("URL scraping task failed error=%s", exc)

@@ -100,6 +100,7 @@ def test_acestream_channels_schema_includes_runtime_last_seen(tmp_path):
             'tvg_name',
             'source_url',
             'last_seen',
+            'added_at',
             'is_active',
             'is_online',
             'network_status',

@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = '20261113_1400'
-down_revision = '20261109_1300'
+down_revision = '20261113_1300'  # fork: after the device playlists' stream_added_at, one chain for the box
 branch_labels = None
 depends_on = None
 

@@ -81,6 +81,25 @@ def test_a_channel_disabled_on_its_own_goes_whatever_its_groups(db_session, cata
     assert filt.hidden == {t['One'].id}
 
 
+def test_channels_without_a_group_are_one_more_group(client, db_session, catalogue):
+    from app.models.models import TVChannel
+    from app.services.device_playlist_service import UNGROUPED, build_filter
+    loose = TVChannel(name='Example Loose', category=None, is_active=True)
+    db_session.add(loose)
+    db_session.commit()
+    assert loose.id not in build_filter(db_session, _playlist(db_session)).hidden
+    filt = build_filter(db_session, _playlist(db_session, disabled_groups=[UNGROUPED]))
+    assert filt.hidden == {loose.id}
+    filt = build_filter(db_session, _playlist(db_session, disabled_groups=[UNGROUPED], enabled_channels=[loose.id]))
+    assert filt.hidden == set()
+
+    groups = client.get('/api/v1/device-playlists/groups').json()
+    assert groups[-1] == {'id': UNGROUPED, 'name': 'No group', 'parent_id': None, 'position': 3, 'channels': 1}
+    created = client.post('/api/v1/device-playlists', json={'name': 'Example kids'}).json()
+    body = client.put(f"/api/v1/device-playlists/{created['id']}", json={'disabled_groups': [UNGROUPED]}).json()
+    assert body['disabled_groups'] == [UNGROUPED] and body['channels'] == 4
+
+
 def test_the_m3u_applies_the_list_and_stays_whole_without_it(client, db_session, catalogue):
     g, t = catalogue['groups'], catalogue['tvs']
     row = _playlist(db_session, disabled_groups=[g['beta'].id, g['gamma'].id], enabled_channels=[t['Two'].id])

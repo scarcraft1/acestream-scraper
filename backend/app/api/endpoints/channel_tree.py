@@ -1,5 +1,7 @@
 """Channel rules tree: store it, preview and apply it, list and undo its runs."""
 from fastapi import APIRouter, Depends
+from fastapi.exceptions import RequestValidationError
+from fastapi.routing import APIRoute
 from sqlalchemy.orm import Session
 
 from app.api.error_handlers import APIError
@@ -9,7 +11,28 @@ from app.schemas.channel_tree import (ChannelTreeExplain, ChannelTreeExplainIn, 
                                       ChannelTreeUpdate)
 from app.services.channel_tree_service import ChannelTreeService, TreeRunError, TreeRunNotFound
 
-router = APIRouter()
+class TreeRequestRoute(APIRoute):
+    """Malformed requests answer in the app's error shape, without echoing the input.
+
+    Pydantic's default 422 repeats what was sent, and a tree is hundreds of kilobytes.
+    """
+
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def guarded(request):
+            try:
+                return await handler(request)
+            except RequestValidationError as exc:
+                errors = [{"loc": list(e["loc"]), "msg": e["msg"]} for e in exc.errors()[:10]]
+                where = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in errors[:3])
+                raise APIError("CHANNEL_TREE_REQUEST", f"Invalid request. {where}", 422,
+                               {"errors": errors}) from None
+
+        return guarded
+
+
+router = APIRouter(route_class=TreeRequestRoute)
 
 
 def _state(service: ChannelTreeService) -> ChannelTreeState:

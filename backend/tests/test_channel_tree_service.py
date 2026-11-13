@@ -500,3 +500,15 @@ def test_apply_undo_and_save_take_the_import_claim_before_reading(db_session):
 
     assert claim_first(apply_sql, "acestream_channels")
     assert claim_first(undo_sql, "channel_tree_runs")
+
+
+def test_a_malformed_request_answers_in_the_app_error_shape_without_the_input(client):
+    big = "x" * 5000
+    r = client.put("/api/v1/channel-tree", json={"tree": [big], "auto": "maybe"})
+    assert r.status_code == 422
+    body = r.json()
+    assert body["error"]["code"] == "CHANNEL_TREE_REQUEST"
+    assert {tuple(e["loc"][:2]) for e in body["error"]["context"]["errors"]} >= {("body", "tree"), ("body", "auto")}
+    assert big not in r.text
+    r = client.post("/api/v1/channel-tree/explain", json={})
+    assert r.json()["error"]["code"] == "CHANNEL_TREE_REQUEST"

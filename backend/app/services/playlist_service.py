@@ -19,14 +19,17 @@ RELAY_MIMETYPE_PROP = '#KODIPROP:mimetype=video/mp2t'
 class PlaylistService:
     """Service for generating M3U playlists"""
 
-    def __init__(self, db: Session, live_base_url: Optional[str] = None):
+    def __init__(self, db: Session, live_base_url: Optional[str] = None, list_filter=None):
         """Initialize with database session.
 
         live_base_url is the server's public address, where players open a
-        broadcaster's live channel (/live/...).
+        broadcaster's live channel (/live/...). list_filter is a device
+        playlist's PlaylistFilter: which TV channels it leaves out and the
+        tabs it gives the rest.
         """
         self.db = db
         self.live_base_url = live_base_url
+        self.list_filter = list_filter
         self.channel_repository = ChannelRepository(db)
 
     @staticmethod
@@ -100,6 +103,8 @@ class PlaylistService:
             from app.services.stream_history import unusable_ids
             gone = unusable_ids(self.db, channels)
             channels = [channel for channel in channels if channel.id.lower() not in gone]
+        if self.list_filter is not None:
+            channels = [channel for channel in channels if self.list_filter.shows(channel.tv_channel_id)]
 
         if "{tv_channel_id}" in base_url:
             tv_ids = {channel.tv_channel_id for channel in channels if channel.tv_channel_id is not None}
@@ -148,6 +153,7 @@ class PlaylistService:
             search=search,
             favorites_only=favorites_only,
         )
+        tv_channels = self._listed(tv_channels)
         base_url, addpid = self._resolve_output_settings(base_url, base_url_id)
 
         lines: List[str] = [self._m3u_header(epg_url)]
@@ -172,7 +178,7 @@ class PlaylistService:
         Generate an M3U playlist of numbered TV channels followed by
         acestreams not assigned to any TV channel (numbered from 9000).
         """
-        tv_channels = self.channel_repository.get_playlist_tv_channels(search=search)
+        tv_channels = self._listed(self.channel_repository.get_playlist_tv_channels(search=search))
         base_url, addpid = self._resolve_output_settings(base_url, base_url_id)
 
         lines: List[str] = [self._m3u_header(epg_url)]
@@ -188,6 +194,18 @@ class PlaylistService:
             lines.extend(self._unassigned_entries(unassigned, tv_channels, base_url, addpid, pid_counter, name_counts))
 
         return "\n".join(lines) + "\n"
+
+    def _listed(self, tv_channels):
+        """The TV channels the device playlist keeps, or all of them without one."""
+        if self.list_filter is None:
+            return tv_channels
+        return [tv for tv in tv_channels if self.list_filter.shows(tv.id)]
+
+    def _category(self, tv_channel) -> Optional[str]:
+        """group-title: the channel's groups, only the enabled ones in a device playlist."""
+        if self.list_filter is None:
+            return tv_channel.category
+        return self.list_filter.title(tv_channel)
 
     @staticmethod
     def _raw_relay_base(base_url: str) -> str:
@@ -227,8 +245,8 @@ class PlaylistService:
             logo = tv_channel.logo_url or stream.logo
             if logo:
                 attrs.append(f'tvg-logo="{self._attr(logo)}"')
-            if tv_channel.category:
-                attrs.append(f'group-title="{self._attr(tv_channel.category)}"')
+            if self._category(tv_channel):
+                attrs.append(f'group-title="{self._attr(self._category(tv_channel))}"')
             lines.append(f'#EXTINF:-1 {" ".join(attrs)},{name}')
             lines.extend(self._link_lines(self._stream_link(stream_base, stream.id, stream_url=getattr(stream, 'stream_url', None), stream_headers=getattr(stream, 'stream_headers', None), live_base_url=self.live_base_url)))
         return lines
@@ -321,8 +339,8 @@ class PlaylistService:
                     attrs.append(f'tvg-logo="{self._attr(tv_channel.logo_url)}"')
                 elif stream.logo:
                     attrs.append(f'tvg-logo="{self._attr(stream.logo)}"')
-                if tv_channel.category:
-                    attrs.append(f'group-title="{self._attr(tv_channel.category)}"')
+                if self._category(tv_channel):
+                    attrs.append(f'group-title="{self._attr(self._category(tv_channel))}"')
 
                 lines.append(f'#EXTINF:-1 {" ".join(attrs)},{display_name}')
                 if stable:

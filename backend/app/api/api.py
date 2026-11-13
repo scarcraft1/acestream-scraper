@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from app.api.endpoints import channels, scrapers, epg, playlists, tv_channels, search, config, health, warp, urls, acestream, stats, activity, background_tasks, streams, base_urls, system, player, remote_players, media_servers, tuner
 from app.api.endpoints import access, watch, viewers, cast
 from app.api.endpoints import recordings, startup, catalogues, events, telegram, setup, import_exclusions, saved_searches
-from app.api.endpoints import channel_tree
+from app.api.endpoints import channel_tree, device_playlists
 
 api_router = APIRouter()
 api_router.include_router(access.router, prefix='/auth', tags=['access'])
@@ -17,6 +17,7 @@ api_router.include_router(channels.router, prefix="/acestream-channels", tags=["
 api_router.include_router(channels.router, prefix="/channels", tags=["channels"])
 api_router.include_router(tv_channels.router, prefix="/tv-channels", tags=["tv-channels"])
 api_router.include_router(channel_tree.router, prefix="/channel-tree", tags=["channel-tree"])
+api_router.include_router(device_playlists.router, prefix="/device-playlists", tags=["device-playlists"])
 api_router.include_router(scrapers.router, prefix="/scrapers", tags=["scrapers"])
 api_router.include_router(epg.router, prefix="/epg", tags=["epg"])
 api_router.include_router(playlists.router, prefix="/playlists", tags=["playlists"])

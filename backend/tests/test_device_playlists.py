@@ -149,6 +149,15 @@ def test_an_unknown_list_is_404(client, catalogue, value):
     assert client.get('/api/v1/playlists/m3u', params={'list': value}).status_code == 404
 
 
+@pytest.mark.parametrize('path', ['/playlists/m3u', '/playlist.m3u'])
+def test_an_unknown_list_on_a_player_route_is_an_error_playlist_not_the_web_page(client, catalogue, path):
+    # A player configured with a list that was deleted must get an error, not
+    # the SPA's index.html with HTTP 200 (an empty channel list, no message).
+    response = client.get(path, params={'list': '999'})
+    assert response.status_code == 404
+    assert response.text.startswith('#EXTM3U') and 'Device playlist not found' in response.text
+
+
 def test_playlist_api_round_trip(client, catalogue):
     g, t = catalogue['groups'], catalogue['tvs']
     groups = client.get('/api/v1/device-playlists/groups').json()

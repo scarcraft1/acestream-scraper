@@ -438,7 +438,13 @@ async def public_m3u_playlist(
     if refresh:
         trigger_url_scrape_refresh()
 
-    playlist_service = playlist_service_for(request, db)
+    try:
+        playlist_service = playlist_service_for(request, db)
+    except StarletteHTTPException as e:
+        # An unknown ?list= (a deleted device playlist): a raised 404 here
+        # would reach the SPA fallback and answer index.html with HTTP 200,
+        # which a player reads as an empty channel list with no message.
+        return PlainTextResponse(f"#EXTM3U\n#EXTINF:-1,Error: {e.detail}\n", status_code=e.status_code)
     try:
         include_groups_list = include_groups.split(",") if include_groups else None
         exclude_groups_list = exclude_groups.split(",") if exclude_groups else None

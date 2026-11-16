@@ -33,7 +33,7 @@ const Playlist: React.FC = () => {
         </Grid>
       </ContentSection>
 
-      {link.managed ? null : <ContentSection title="Device playlists"><DevicePlaylists /></ContentSection>}
+      {link.managed ? null : <ContentSection title={tUi("Device playlists")}><DevicePlaylists /></ContentSection>}
 
       <Collapse in={formatsOpen} mountOnEnter unmountOnExit id="playlist-formats">
         <Alert severity="info" sx={{ mb: 2 }}>{tUi("Formats are shared with copied stream links and supported remote-player actions. Changing the default affects all links that use it.")}</Alert>

@@ -954,6 +954,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/channel-tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Tree */
+        get: operations["get_tree_api_v1_channel_tree_get"];
+        /** Put Tree */
+        put: operations["put_tree_api_v1_channel_tree_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channel-tree/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply */
+        post: operations["apply_api_v1_channel_tree_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channel-tree/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explain */
+        post: operations["explain_api_v1_channel_tree_explain_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channel-tree/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview */
+        post: operations["preview_api_v1_channel_tree_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channel-tree/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Runs */
+        get: operations["runs_api_v1_channel_tree_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/channel-tree/runs/{run_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo */
+        post: operations["undo_api_v1_channel_tree_runs__run_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/channels/": {
         parameters: {
             query?: never;
@@ -1639,6 +1742,60 @@ export interface paths {
         put: operations["update_config_key_api_v1_config__key__put"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device-playlists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Playlists */
+        get: operations["list_playlists_api_v1_device_playlists_get"];
+        put?: never;
+        /** Create Playlist */
+        post: operations["create_playlist_api_v1_device_playlists_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device-playlists/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Groups */
+        get: operations["list_groups_api_v1_device_playlists_groups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/device-playlists/{playlist_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Playlist */
+        get: operations["get_playlist_api_v1_device_playlists__playlist_id__get"];
+        /** Update Playlist */
+        put: operations["update_playlist_api_v1_device_playlists__playlist_id__put"];
+        post?: never;
+        /** Delete Playlist */
+        delete: operations["delete_playlist_api_v1_device_playlists__playlist_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -6311,6 +6468,19 @@ export interface components {
             /** Parent */
             parent?: string | null;
         };
+        /** ChannelGroupOut */
+        ChannelGroupOut: {
+            /** Channels */
+            channels: number;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Position */
+            position: number;
+        };
         /**
          * ChannelResult
          * @description Schema for channel result from scraping
@@ -6401,6 +6571,224 @@ export interface components {
             total_channels: number;
             /** Unknown */
             unknown: number;
+        };
+        /** ChannelTreeChangeOut */
+        ChannelTreeChangeOut: {
+            /** After */
+            after?: {
+                [key: string]: unknown;
+            } | null;
+            /** Before */
+            before?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Before Channel
+             * @description Channel the stream leaves
+             */
+            before_channel?: string | null;
+            /** Channel */
+            channel?: string | null;
+            /**
+             * How
+             * @description How the leaf's channel was found
+             * @default
+             * @enum {string}
+             */
+            how?: "" | "existing" | "publisher_code" | "new" | "ambiguous";
+            /** Kind */
+            kind: string;
+            /**
+             * Path
+             * @description Tree nodes the stream went through, below the root
+             */
+            path?: string[];
+            /** Stream Id */
+            stream_id?: string | null;
+            /**
+             * Stream Name
+             * @description Name of the stream the change moves
+             */
+            stream_name?: string | null;
+            /** Tv Channel Id */
+            tv_channel_id?: number | null;
+        };
+        /** ChannelTreeExplain */
+        ChannelTreeExplain: {
+            /** Channel */
+            channel?: string | null;
+            /** Current Channel */
+            current_channel?: string | null;
+            /** Groups */
+            groups?: string[];
+            /**
+             * Guide
+             * @description null: no guide; empty: automatic
+             * @default
+             */
+            guide?: string | null;
+            /**
+             * How
+             * @default
+             * @enum {string}
+             */
+            how?: "" | "existing" | "publisher_code" | "new" | "ambiguous";
+            /** Path */
+            path?: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "channel" | "none" | "rest";
+            /** Stream Id */
+            stream_id: string;
+            /** Stream Name */
+            stream_name?: string | null;
+        };
+        /** ChannelTreeExplainIn */
+        ChannelTreeExplainIn: {
+            /** Stream Id */
+            stream_id: string;
+        };
+        /** ChannelTreeNodeCount */
+        ChannelTreeNodeCount: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Streams */
+            streams: number;
+        };
+        /** ChannelTreePreview */
+        ChannelTreePreview: {
+            /** Changes */
+            changes: components["schemas"]["ChannelTreeChangeOut"][];
+            /**
+             * Nodes
+             * @description Streams that reached each node
+             */
+            nodes?: components["schemas"]["ChannelTreeNodeCount"][];
+            /** Stats */
+            stats: {
+                [key: string]: unknown;
+            };
+            /**
+             * Total Changes
+             * @default 0
+             */
+            total_changes?: number;
+            /**
+             * Truncated
+             * @description A list was cut at the limit
+             * @default false
+             */
+            truncated?: boolean;
+            /** Unplaced */
+            unplaced?: components["schemas"]["ChannelTreeUnplacedOut"][];
+            /**
+             * Unplaced Total
+             * @default 0
+             */
+            unplaced_total?: number;
+        };
+        /** ChannelTreeRunOut */
+        ChannelTreeRunOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Stats */
+            stats: {
+                [key: string]: unknown;
+            };
+            /** Trigger */
+            trigger: string;
+            /** Undone At */
+            undone_at?: string | null;
+        };
+        /** ChannelTreeScope */
+        ChannelTreeScope: {
+            /**
+             * Scope
+             * @description all: every stream; unassigned: streams without a channel
+             * @default all
+             * @enum {string}
+             */
+            scope?: "all" | "unassigned";
+        };
+        /** ChannelTreeState */
+        ChannelTreeState: {
+            /**
+             * Auto
+             * @description Imports put new streams without a channel through the tree
+             * @default false
+             */
+            auto?: boolean;
+            /**
+             * Tree
+             * @description The stored rules tree, or null when there is none
+             */
+            tree?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ChannelTreeUndoOut */
+        ChannelTreeUndoOut: {
+            /**
+             * Channels Kept
+             * @default 0
+             */
+            channels_kept?: number;
+            /**
+             * Channels Removed
+             * @default 0
+             */
+            channels_removed?: number;
+            /**
+             * Streams
+             * @default 0
+             */
+            streams?: number;
+        };
+        /** ChannelTreeUnplacedOut */
+        ChannelTreeUnplacedOut: {
+            /** Candidates */
+            candidates?: string[];
+            /** Channel */
+            channel?: string | null;
+            /**
+             * Path
+             * @description Where the stream stopped
+             */
+            path?: string[];
+            /**
+             * Status
+             * @description rest: no child matched; none: a leaf without channel; ambiguous: two channels answer
+             * @enum {string}
+             */
+            status: "rest" | "none" | "ambiguous";
+            /** Stream Id */
+            stream_id: string;
+            /** Stream Name */
+            stream_name?: string | null;
+        };
+        /** ChannelTreeUpdate */
+        ChannelTreeUpdate: {
+            /**
+             * Auto
+             * @description Switch for imports; omitted keeps it
+             */
+            auto?: boolean | null;
+            /**
+             * Tree
+             * @description Rules tree to store; omitted keeps the stored one
+             */
+            tree?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** CheckEngineConfig */
         CheckEngineConfig: {
@@ -6537,6 +6925,66 @@ export interface components {
             auto_refresh_interval?: number | null;
             /** Retention Days */
             retention_days?: number | null;
+        };
+        /** DevicePlaylistCreate */
+        DevicePlaylistCreate: {
+            /** Copy From */
+            copy_from?: number | null;
+            /** Name */
+            name: string;
+            /** Owner Id */
+            owner_id?: string | null;
+        };
+        /** DevicePlaylistOut */
+        DevicePlaylistOut: {
+            /**
+             * Channels
+             * @description TV channels the playlist keeps
+             */
+            channels: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Disabled Channels */
+            disabled_channels: number[];
+            /** Disabled Groups */
+            disabled_groups: number[];
+            /** Enabled Channels */
+            enabled_channels: number[];
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Owner Id */
+            owner_id?: string | null;
+            /**
+             * Tabs
+             * @description Distinct group-title tabs the playlist gives Kodi
+             */
+            tabs: number;
+            /**
+             * Total
+             * @description TV channels in the catalogue
+             */
+            total: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** DevicePlaylistUpdate */
+        DevicePlaylistUpdate: {
+            /** Disabled Channels */
+            disabled_channels?: number[] | null;
+            /** Disabled Groups */
+            disabled_groups?: number[] | null;
+            /** Enabled Channels */
+            enabled_channels?: number[] | null;
+            /** Name */
+            name?: string | null;
         };
         /** DisableAccess */
         DisableAccess: {
@@ -11672,6 +12120,14 @@ export interface operations {
                     "application/json": components["schemas"]["UnassignedStreamsSummary"];
                 };
             };
+            400: components["responses"]["ApplicationProblem400"];
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            404: components["responses"]["ApplicationProblem404"];
+            409: components["responses"]["ApplicationProblem409"];
+            422: components["responses"]["ApplicationProblem422"];
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
         };
     };
     get_acestream_channel_api_v1_acestream_channels__acestreamchannel_id__get: {
@@ -13282,6 +13738,237 @@ export interface operations {
             503: components["responses"]["ApplicationProblem503"];
         };
     };
+    get_tree_api_v1_channel_tree_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTreeState"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    put_tree_api_v1_channel_tree_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelTreeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTreeState"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    apply_api_v1_channel_tree_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelTreeScope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTreeRunOut"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    explain_api_v1_channel_tree_explain_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelTreeExplainIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTreeExplain"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    preview_api_v1_channel_tree_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelTreeScope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTreePreview"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    runs_api_v1_channel_tree_runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTreeRunOut"][];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    undo_api_v1_channel_tree_runs__run_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelTreeUndoOut"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
     get_acestream_channels_api_v1_channels__get: {
         parameters: {
             query?: {
@@ -13578,6 +14265,14 @@ export interface operations {
                     "application/json": components["schemas"]["UnassignedStreamsSummary"];
                 };
             };
+            400: components["responses"]["ApplicationProblem400"];
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            404: components["responses"]["ApplicationProblem404"];
+            409: components["responses"]["ApplicationProblem409"];
+            422: components["responses"]["ApplicationProblem422"];
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
         };
     };
     get_acestream_channel_api_v1_channels__acestreamchannel_id__get: {
@@ -14869,6 +15564,198 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConfigUpdateResponse"];
                 };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    list_playlists_api_v1_device_playlists_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevicePlaylistOut"][];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    create_playlist_api_v1_device_playlists_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevicePlaylistCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevicePlaylistOut"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    list_groups_api_v1_device_playlists_groups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelGroupOut"][];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    get_playlist_api_v1_device_playlists__playlist_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevicePlaylistOut"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    update_playlist_api_v1_device_playlists__playlist_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevicePlaylistUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevicePlaylistOut"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    delete_playlist_api_v1_device_playlists__playlist_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["ApplicationProblem401"];
             403: components["responses"]["ApplicationProblem403"];
@@ -17353,6 +18240,8 @@ export interface operations {
                 base_url_id?: number | null;
                 format?: string | null;
                 refresh?: boolean;
+                /** @description Device playlist id: leaves out its disabled groups and channels. */
+                list?: number;
             };
             header?: never;
             path?: never;
@@ -17451,6 +18340,8 @@ export interface operations {
                 base_url_id?: number | null;
                 format?: string | null;
                 refresh?: boolean;
+                /** @description Device playlist id: leaves out its disabled groups and channels. */
+                list?: number;
             };
             header?: never;
             path?: never;
@@ -17501,6 +18392,8 @@ export interface operations {
                 base_url_id?: number | null;
                 format?: string | null;
                 refresh?: boolean;
+                /** @description Device playlist id: leaves out its disabled groups and channels. */
+                list?: number;
             };
             header?: never;
             path?: never;
@@ -17541,6 +18434,8 @@ export interface operations {
                 base_url_id?: number | null;
                 format?: string | null;
                 refresh?: boolean;
+                /** @description Device playlist id: leaves out its disabled groups and channels. */
+                list?: number;
             };
             header?: never;
             path?: never;

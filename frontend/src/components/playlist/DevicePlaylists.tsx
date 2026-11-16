@@ -3,6 +3,7 @@ import {
   Alert, Autocomplete, Box, Button, Checkbox, Divider, FormControlLabel, Grid, List, ListItemButton, ListItemText, Stack,
   TextField, Typography,
 } from '@mui/material';
+import { useUiText } from '../../i18n/useUiText';
 import { useConfirm } from '../ConfirmDialog';
 import {
   useCreateDevicePlaylist, useDeleteDevicePlaylist, useDevicePlaylistGroups, useDevicePlaylists, useUpdateDevicePlaylist,
@@ -35,6 +36,7 @@ const groupTree = (groups: ChannelGroup[]): { group: ChannelGroup; depth: number
 
 /** One M3U per device: which groups and channels each one leaves out. */
 const DevicePlaylists: React.FC = () => {
+  const tUi = useUiText();
   const { data: playlists = [], isLoading, isError } = useDevicePlaylists();
   const { data: groups = [] } = useDevicePlaylistGroups();
   const { data: channels = [] } = useTVChannelCatalog();
@@ -85,7 +87,7 @@ const DevicePlaylists: React.FC = () => {
   };
   const removeSelected = async () => {
     if (!selected) return;
-    if (await confirm({ title: `Delete «${selected.name}»?`, body: 'Players using its link get the whole catalogue back.', confirmLabel: 'Delete', danger: true })) {
+    if (await confirm({ title: tUi("Delete «{{value0}}»?", { value0: selected.name }), body: tUi("Players using its link get the whole catalogue back."), confirmLabel: tUi("Delete"), danger: true })) {
       remove.mutate(selected.id);
       setSelectedId(null);
     }
@@ -100,19 +102,19 @@ const DevicePlaylists: React.FC = () => {
       {dialog}
       <Grid item xs={12} md={4}>
         <Stack spacing={1.5}>
-          <Typography variant="sectionTitle" component="h3">Devices</Typography>
-          {isError ? <Alert severity="warning">Could not load device playlists.</Alert> : null}
-          {!isLoading && !playlists.length ? <Typography variant="body2" color="text.secondary">No device playlists yet. The playlist has every channel.</Typography> : null}
-          <List dense disablePadding aria-label="Device playlists">
+          <Typography variant="sectionTitle" component="h3">{tUi("Devices")}</Typography>
+          {isError ? <Alert severity="warning">{tUi("Could not load device playlists.")}</Alert> : null}
+          {!isLoading && !playlists.length ? <Typography variant="body2" color="text.secondary">{tUi("No device playlists yet. The playlist has every channel.")}</Typography> : null}
+          <List dense disablePadding aria-label={tUi("Device playlists")}>
             {playlists.map((row) => (
               <ListItemButton key={row.id} selected={row.id === selected?.id} onClick={() => setSelectedId(row.id)}>
-                <ListItemText primary={row.name} secondary={`${row.channels} of ${row.total} channels`} />
+                <ListItemText primary={row.name} secondary={tUi("{{value0}} of {{value1}} channels", { value0: row.channels, value1: row.total })} />
               </ListItemButton>
             ))}
           </List>
           <Stack direction="row" spacing={1} component="form" onSubmit={(event) => { event.preventDefault(); void add(); }}>
-            <TextField size="small" fullWidth label="New device" placeholder="Kitchen TV" value={newName} onChange={(event) => setNewName(event.target.value)} inputProps={{ maxLength: 120 }} />
-            <Button type="submit" variant="outlined" disabled={!newName.trim() || create.isPending}>Add</Button>
+            <TextField size="small" fullWidth label={tUi("New device")} placeholder={tUi("Kitchen TV")} value={newName} onChange={(event) => setNewName(event.target.value)} inputProps={{ maxLength: 120 }} />
+            <Button type="submit" variant="outlined" disabled={!newName.trim() || create.isPending}>{tUi("Add")}</Button>
           </Stack>
         </Stack>
       </Grid>
@@ -122,17 +124,17 @@ const DevicePlaylists: React.FC = () => {
             <Box>
               <Typography variant="sectionTitle" component="h3">{selected.name}</Typography>
               <Typography variant="body2" color="text.secondary" role="status">
-                {`${selected.channels} of ${selected.total} channels · ${selected.tabs} tabs`}
+                {tUi("{{value0}} of {{value1}} channels · {{value2}} tabs", { value0: selected.channels, value1: selected.total, value2: selected.tabs })}
               </Typography>
             </Box>
-            {update.isError ? <Alert severity="error">Could not save the change. Try again.</Alert> : null}
+            {update.isError ? <Alert severity="error">{tUi("Could not save the change. Try again.")}</Alert> : null}
             <Box>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                <Typography variant="subtitle2" component="h4" sx={{ flexGrow: 1 }}>Groups</Typography>
-                <Button size="small" onClick={() => save({ disabled_groups: [] })}>Enable all</Button>
-                <Button size="small" onClick={() => save({ disabled_groups: groups.filter((group) => group.parent_id == null).map((group) => group.id) })}>Disable all</Button>
+                <Typography variant="subtitle2" component="h4" sx={{ flexGrow: 1 }}>{tUi("Groups")}</Typography>
+                <Button size="small" onClick={() => save({ disabled_groups: [] })}>{tUi("Enable all")}</Button>
+                <Button size="small" onClick={() => save({ disabled_groups: groups.filter((group) => group.parent_id == null).map((group) => group.id) })}>{tUi("Disable all")}</Button>
               </Stack>
-              <Typography variant="body2" color="text.secondary">Unticking a group disables it and its subgroups. A channel with any disabled group is left out.</Typography>
+              <Typography variant="body2" color="text.secondary">{tUi("Unticking a group disables it and its subgroups. A channel with any disabled group is left out.")}</Typography>
               <Stack>
                 {tree.map(({ group, depth }) => {
                   const parent = offAncestor(group);
@@ -142,7 +144,7 @@ const DevicePlaylists: React.FC = () => {
                       sx={{ pl: depth * 3 }}
                       control={<Checkbox size="small" checked={!off.has(group.id) && !parent} disabled={Boolean(parent) || update.isPending}
                         onChange={(event) => toggleGroup(group.id, event.target.checked)} />}
-                      label={parent ? `${group.name} — off because «${parent.name}» is` : `${group.name} (${group.channels})`}
+                      label={parent ? tUi("{{value0}} — off because «{{value1}}» is", { value0: group.name, value1: parent.name }) : `${group.name} (${group.channels})`}
                     />
                   );
                 })}
@@ -150,8 +152,8 @@ const DevicePlaylists: React.FC = () => {
             </Box>
             <Divider />
             <Box>
-              <Typography variant="subtitle2" component="h4">Single channels</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Override the groups for one channel.</Typography>
+              <Typography variant="subtitle2" component="h4">{tUi("Single channels")}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{tUi("Override the groups for one channel.")}</Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                 <Autocomplete<ChannelOption>
                   size="small"
@@ -161,23 +163,23 @@ const DevicePlaylists: React.FC = () => {
                   onChange={(_, value) => setChannel(value)}
                   getOptionLabel={(option) => option.name}
                   isOptionEqualToValue={(a, b) => a.id === b.id}
-                  renderInput={(params) => <TextField {...params} label="TV channel" />}
+                  renderInput={(params) => <TextField {...params} label={tUi("TV channel")} />}
                 />
-                <Button variant="outlined" disabled={!channel} onClick={() => { if (channel) { setChannelState(channel.id, 'on'); setChannel(null); } }}>Enable</Button>
-                <Button variant="outlined" disabled={!channel} onClick={() => { if (channel) { setChannelState(channel.id, 'off'); setChannel(null); } }}>Disable</Button>
+                <Button variant="outlined" disabled={!channel} onClick={() => { if (channel) { setChannelState(channel.id, 'on'); setChannel(null); } }}>{tUi("Enable")}</Button>
+                <Button variant="outlined" disabled={!channel} onClick={() => { if (channel) { setChannelState(channel.id, 'off'); setChannel(null); } }}>{tUi("Disable")}</Button>
               </Stack>
-              <List dense aria-label="Channels set on their own">
+              <List dense aria-label={tUi("Channels set on their own")}>
                 {overrides.map(({ id, enabled }) => (
                   <Stack key={id} direction="row" alignItems="center" spacing={1} sx={{ py: 0.25 }}>
-                    <Typography variant="body2" sx={{ flexGrow: 1 }}>{channelNames.get(id) ?? `Channel ${id}`}</Typography>
-                    <Typography variant="body2" color={enabled ? 'success.main' : 'text.secondary'}>{enabled ? 'Enabled' : 'Disabled'}</Typography>
-                    <Button size="small" onClick={() => setChannelState(id, 'groups')}>Follow groups</Button>
+                    <Typography variant="body2" sx={{ flexGrow: 1 }}>{channelNames.get(id) ?? tUi("Channel {{value0}}", { value0: id })}</Typography>
+                    <Typography variant="body2" color={enabled ? 'success.main' : 'text.secondary'}>{enabled ? tUi("Enabled") : tUi("Disabled")}</Typography>
+                    <Button size="small" onClick={() => setChannelState(id, 'groups')}>{tUi("Follow groups")}</Button>
                   </Stack>
                 ))}
               </List>
             </Box>
             <Box>
-              <Button color="error" onClick={() => void removeSelected()}>Delete playlist</Button>
+              <Button color="error" onClick={() => void removeSelected()}>{tUi("Delete playlist")}</Button>
             </Box>
           </Stack>
         ) : null}

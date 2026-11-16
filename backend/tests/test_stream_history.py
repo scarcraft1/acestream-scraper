@@ -190,7 +190,7 @@ def test_a_database_at_the_box_merge_revision_still_gets_the_epg_identities(tmp_
     engine.dispose()
     upgrade_to_head(path)
     with closing(sqlite3.connect(path)) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '20261110_1200'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '20261109_1300'
     engine = create_engine(database_url_for(path))
     assert 'epg_channel_identities' in inspect(engine).get_table_names()
     engine.dispose()
@@ -210,7 +210,7 @@ def test_box_revision_follows_the_history_and_downgrades_to_it(tmp_path):
         with closing(sqlite3.connect(path)) as db:
             return db.execute('SELECT version_num FROM alembic_version').fetchone()[0]
 
-    assert version() == '20261110_1200'
+    assert version() == '20261109_1300'
     engine = create_engine(database_url_for(path))
     assert 'offline_since' in {c['name'] for c in inspect(engine).get_columns('acestream_channels')}
     engine.dispose()

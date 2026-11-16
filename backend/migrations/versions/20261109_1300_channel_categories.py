@@ -3,7 +3,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = '20261109_1300'
-down_revision = '20261109_1200'
+down_revision = '20261110_1200'  # fork: develop's parent 20261109_1200 is the EPG identities migration, 20261109_1201 here; follow the box's merge revision (FORK.md §5)
 branch_labels = None
 depends_on = None
 

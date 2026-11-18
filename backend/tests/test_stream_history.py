@@ -453,7 +453,7 @@ def test_source_worked_migration_fills_in_from_checks_and_viewings(tmp_path):
     import sqlite3
     from contextlib import closing
     path = tmp_path / 'worked.db'
-    upgrade_to_revision(path, '20261109_1300')
+    upgrade_to_revision(path, '20261113_1300')
     checked = '2026-11-01 10:00:00.000000'
     with closing(sqlite3.connect(path)) as db:
         for cid, online in (('a', 1), ('b', 0), ('c', 0)):
@@ -470,7 +470,7 @@ def test_source_worked_migration_fills_in_from_checks_and_viewings(tmp_path):
         assert db.execute("SELECT SUM(failed_checks) FROM acestream_channels").fetchone()[0] == 0
     assert rows['a'].startswith('2026-11-01 10:00') and rows['b'].startswith('2026-11-05 10:00')
     assert rows['c'] is None
-    downgrade_to_revision(path, '20261109_1300')
+    downgrade_to_revision(path, '20261113_1300')
     engine = create_engine(database_url_for(path))
     assert 'failed_checks' not in {c['name'] for c in inspect(engine).get_columns('acestream_channels')}
     engine.dispose()

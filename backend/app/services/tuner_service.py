@@ -208,7 +208,8 @@ class TunerService:
         seen online (recently or not) before never checked or offline from an
         old check. Within each, official HTTP first, then by language
         (Castilian first), then a recent check, then bitrate. Only a source
-        found offline recently is left out, even if the user ordered it.
+        found offline recently is left out, even if the user ordered it, unless
+        it also played recently.
 
         When a box that is only on now and then is switched on for a match,
         every status is hours or days old, and the source that is live tonight may be the one the

@@ -45,14 +45,21 @@ def sort_streams_curated(streams: Iterable[T]) -> List[T]:
 FRESH_CHECK_HOURS = 6
 
 
-def checked_since(stream, since: datetime, until: datetime) -> bool:
-    checked = getattr(stream, "last_checked", None)
-    if checked is None:
+def _observed_since(when, since: datetime, until: datetime) -> bool:
+    if when is None:
         return False
-    if checked.tzinfo is None:
-        checked = checked.replace(tzinfo=timezone.utc)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
     # A clock correction must not make an observation fresh indefinitely.
-    return since <= checked <= until
+    return since <= when <= until
+
+
+def checked_since(stream, since: datetime, until: datetime) -> bool:
+    return _observed_since(getattr(stream, "last_checked", None), since, until)
+
+
+def worked_since(stream, since: datetime, until: datetime) -> bool:
+    return _observed_since(getattr(stream, "last_worked_at", None), since, until)
 
 
 # Castilian first (20-10: in the test one channel came out in Russian
@@ -112,7 +119,10 @@ def relay_order(streams: Iterable, history: Mapping, now: datetime) -> List[str]
     user's order for this channel is the relay's order. Then sources seen
     online, recent or not; never checked, or offline from an older check; a
     demoted source after every group, never dropped. A source found offline
-    recently is left out.
+    recently is left out, unless it also played within ``FRESH_CHECK_HOURS``:
+    a check right after the relay lets a source go can find no media, and
+    that one check must not keep the source that just played out of the
+    relay for hours. It is tried with the never-checked ones.
 
     Within a group the language decides before freshness (20-10: on
     one channel the only source checked that day was in another language and
@@ -129,7 +139,7 @@ def relay_order(streams: Iterable, history: Mapping, now: datetime) -> List[str]
         fresh = checked_since(stream, fresh_since, now)
         if stream.is_online:
             group = 0
-        elif stream.is_online is False and fresh:
+        elif stream.is_online is False and fresh and not worked_since(stream, fresh_since, now):
             continue
         else:
             group = 1

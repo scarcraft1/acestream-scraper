@@ -3337,6 +3337,45 @@
         "title": "CategoryView",
         "type": "object"
       },
+      "ChannelGroupOut": {
+        "properties": {
+          "channels": {
+            "title": "Channels",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "position",
+          "channels"
+        ],
+        "title": "ChannelGroupOut",
+        "type": "object"
+      },
       "ChannelResult": {
         "description": "Schema for channel result from scraping",
         "properties": {
@@ -3548,6 +3587,501 @@
           "checked_percentage"
         ],
         "title": "ChannelStatusSummary",
+        "type": "object"
+      },
+      "ChannelTreeChangeOut": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "before_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Channel the stream leaves",
+            "title": "Before Channel"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "how": {
+            "default": "",
+            "description": "How the leaf's channel was found",
+            "enum": [
+              "",
+              "existing",
+              "publisher_code",
+              "new",
+              "ambiguous"
+            ],
+            "title": "How",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "description": "Tree nodes the stream went through, below the root",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "stream_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Id"
+          },
+          "stream_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Name of the stream the change moves",
+            "title": "Stream Name"
+          },
+          "tv_channel_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tv Channel Id"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ChannelTreeChangeOut",
+        "type": "object"
+      },
+      "ChannelTreeExplain": {
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "current_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Channel"
+          },
+          "groups": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "guide": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "description": "null: no guide; empty: automatic",
+            "title": "Guide"
+          },
+          "how": {
+            "default": "",
+            "enum": [
+              "",
+              "existing",
+              "publisher_code",
+              "new",
+              "ambiguous"
+            ],
+            "title": "How",
+            "type": "string"
+          },
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "channel",
+              "none",
+              "rest"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "stream_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Name"
+          }
+        },
+        "required": [
+          "stream_id",
+          "status"
+        ],
+        "title": "ChannelTreeExplain",
+        "type": "object"
+      },
+      "ChannelTreeExplainIn": {
+        "properties": {
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id"
+        ],
+        "title": "ChannelTreeExplainIn",
+        "type": "object"
+      },
+      "ChannelTreeNodeCount": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "streams": {
+            "title": "Streams",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "streams"
+        ],
+        "title": "ChannelTreeNodeCount",
+        "type": "object"
+      },
+      "ChannelTreePreview": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelTreeChangeOut"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "nodes": {
+            "description": "Streams that reached each node",
+            "items": {
+              "$ref": "#/components/schemas/ChannelTreeNodeCount"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "stats": {
+            "additionalProperties": true,
+            "title": "Stats",
+            "type": "object"
+          },
+          "total_changes": {
+            "default": 0,
+            "title": "Total Changes",
+            "type": "integer"
+          },
+          "truncated": {
+            "default": false,
+            "description": "A list was cut at the limit",
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "unplaced": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelTreeUnplacedOut"
+            },
+            "title": "Unplaced",
+            "type": "array"
+          },
+          "unplaced_total": {
+            "default": 0,
+            "title": "Unplaced Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stats",
+          "changes"
+        ],
+        "title": "ChannelTreePreview",
+        "type": "object"
+      },
+      "ChannelTreeRunOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "stats": {
+            "additionalProperties": true,
+            "title": "Stats",
+            "type": "object"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          },
+          "undone_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Undone At"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "trigger",
+          "stats"
+        ],
+        "title": "ChannelTreeRunOut",
+        "type": "object"
+      },
+      "ChannelTreeScope": {
+        "properties": {
+          "scope": {
+            "default": "all",
+            "description": "all: every stream; unassigned: streams without a channel",
+            "enum": [
+              "all",
+              "unassigned"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "title": "ChannelTreeScope",
+        "type": "object"
+      },
+      "ChannelTreeState": {
+        "properties": {
+          "auto": {
+            "default": false,
+            "description": "Imports put new streams without a channel through the tree",
+            "title": "Auto",
+            "type": "boolean"
+          },
+          "tree": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The stored rules tree, or null when there is none",
+            "title": "Tree"
+          }
+        },
+        "title": "ChannelTreeState",
+        "type": "object"
+      },
+      "ChannelTreeUndoOut": {
+        "properties": {
+          "channels_kept": {
+            "default": 0,
+            "title": "Channels Kept",
+            "type": "integer"
+          },
+          "channels_removed": {
+            "default": 0,
+            "title": "Channels Removed",
+            "type": "integer"
+          },
+          "streams": {
+            "default": 0,
+            "title": "Streams",
+            "type": "integer"
+          }
+        },
+        "title": "ChannelTreeUndoOut",
+        "type": "object"
+      },
+      "ChannelTreeUnplacedOut": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "path": {
+            "description": "Where the stream stopped",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "status": {
+            "description": "rest: no child matched; none: a leaf without channel; ambiguous: two channels answer",
+            "enum": [
+              "rest",
+              "none",
+              "ambiguous"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "stream_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stream Name"
+          }
+        },
+        "required": [
+          "stream_id",
+          "status"
+        ],
+        "title": "ChannelTreeUnplacedOut",
+        "type": "object"
+      },
+      "ChannelTreeUpdate": {
+        "properties": {
+          "auto": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Switch for imports; omitted keeps it",
+            "title": "Auto"
+          },
+          "tree": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rules tree to store; omitted keeps the stored one",
+            "title": "Tree"
+          }
+        },
+        "title": "ChannelTreeUpdate",
         "type": "object"
       },
       "CheckEngineConfig": {
@@ -3836,6 +4370,191 @@
           }
         },
         "title": "DashboardConfigUpdate",
+        "type": "object"
+      },
+      "DevicePlaylistCreate": {
+        "properties": {
+          "copy_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copy From"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DevicePlaylistCreate",
+        "type": "object"
+      },
+      "DevicePlaylistOut": {
+        "properties": {
+          "channels": {
+            "description": "TV channels the playlist keeps",
+            "title": "Channels",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "disabled_channels": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Disabled Channels",
+            "type": "array"
+          },
+          "disabled_groups": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Disabled Groups",
+            "type": "array"
+          },
+          "enabled_channels": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Enabled Channels",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "tabs": {
+            "description": "Distinct group-title tabs the playlist gives Kodi",
+            "title": "Tabs",
+            "type": "integer"
+          },
+          "total": {
+            "description": "TV channels in the catalogue",
+            "title": "Total",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "disabled_groups",
+          "enabled_channels",
+          "disabled_channels",
+          "created_at",
+          "updated_at",
+          "channels",
+          "total",
+          "tabs"
+        ],
+        "title": "DevicePlaylistOut",
+        "type": "object"
+      },
+      "DevicePlaylistUpdate": {
+        "properties": {
+          "disabled_channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 20000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Channels"
+          },
+          "disabled_groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 5000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Groups"
+          },
+          "enabled_channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 20000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled Channels"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "DevicePlaylistUpdate",
         "type": "object"
       },
       "DisableAccess": {
@@ -13861,19 +14580,25 @@
             "type": "boolean"
           },
           "source_start_seconds": {
-            "default": 15,
+            "default": 20,
             "description": "Seconds a source gets to deliver its first byte before the next is tried",
             "title": "Source Start Seconds",
             "type": "integer"
           },
           "startup_budget_seconds": {
-            "default": 45,
-            "description": "Seconds for the whole start across sources; keep it under the player's own timeout (Kodi gives up after about 30)",
+            "default": 28,
+            "description": "Seconds for the whole start across sources; keep it under the player's limit (Kodi gives up after 30)",
             "title": "Startup Budget Seconds",
             "type": "integer"
           },
           "tuner_count": {
             "title": "Tuner Count",
+            "type": "integer"
+          },
+          "waiting_card_seconds": {
+            "default": 20,
+            "description": "Seconds without video before a \u00abConectando\u2026\u00bb card is sent while more sources are tried; 0 = never",
+            "title": "Waiting Card Seconds",
             "type": "integer"
           }
         },
@@ -13995,6 +14720,19 @@
               }
             ],
             "title": "Tuner Count"
+          },
+          "waiting_card_seconds": {
+            "anyOf": [
+              {
+                "maximum": 28.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Card Seconds"
           }
         },
         "title": "TunerSettingsUpdate",
@@ -14483,6 +15221,40 @@
           }
         },
         "title": "URLUpdate",
+        "type": "object"
+      },
+      "UnassignedStreamsSummary": {
+        "description": "Active streams without a TV channel: an assignment rule is missing or failing.",
+        "properties": {
+          "examples": {
+            "description": "Names of the latest ones",
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "recent": {
+            "description": "Of those, how many arrived in the last recent_days",
+            "title": "Recent",
+            "type": "integer"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "recent",
+          "recent_days",
+          "examples"
+        ],
+        "title": "UnassignedStreamsSummary",
         "type": "object"
       },
       "UpdateStatus": {
@@ -16304,6 +17076,53 @@
           }
         },
         "summary": "Get Channel Status Summary",
+        "tags": [
+          "channels"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/acestream-channels/unassigned_summary": {
+      "get": {
+        "description": "Active streams without a TV channel, for the dashboard's notice.",
+        "operationId": "get_unassigned_summary_api_v1_acestream_channels_unassigned_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnassignedStreamsSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/ApplicationProblem400"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApplicationProblem404"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApplicationProblem409"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApplicationProblem422"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Get Unassigned Summary",
         "tags": [
           "channels"
         ],
@@ -19261,6 +20080,347 @@
         "x-access-class": "management"
       }
     },
+    "/api/v1/channel-tree": {
+      "get": {
+        "operationId": "get_tree_api_v1_channel_tree_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Get Tree",
+        "tags": [
+          "channel-tree"
+        ],
+        "x-access-class": "management"
+      },
+      "put": {
+        "operationId": "put_tree_api_v1_channel_tree_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelTreeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Put Tree",
+        "tags": [
+          "channel-tree"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/channel-tree/apply": {
+      "post": {
+        "operationId": "apply_api_v1_channel_tree_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelTreeScope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeRunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Apply",
+        "tags": [
+          "channel-tree"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/channel-tree/explain": {
+      "post": {
+        "operationId": "explain_api_v1_channel_tree_explain_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelTreeExplainIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeExplain"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Explain",
+        "tags": [
+          "channel-tree"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/channel-tree/preview": {
+      "post": {
+        "operationId": "preview_api_v1_channel_tree_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelTreeScope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Preview",
+        "tags": [
+          "channel-tree"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/channel-tree/runs": {
+      "get": {
+        "operationId": "runs_api_v1_channel_tree_runs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelTreeRunOut"
+                  },
+                  "title": "Response Runs Api V1 Channel Tree Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Runs",
+        "tags": [
+          "channel-tree"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/channel-tree/runs/{run_id}/undo": {
+      "post": {
+        "operationId": "undo_api_v1_channel_tree_runs__run_id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelTreeUndoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Undo",
+        "tags": [
+          "channel-tree"
+        ],
+        "x-access-class": "management"
+      }
+    },
     "/api/v1/channels/": {
       "get": {
         "description": "Get all channels with optional filtering.\nSupports both skip/limit and page/page_size parameters.\nSet assigned=false to list only streams not linked to a TV channel.\nReturns paginated items and total count.",
@@ -19866,6 +21026,53 @@
           }
         },
         "summary": "Get Channel Status Summary",
+        "tags": [
+          "channels"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/channels/unassigned_summary": {
+      "get": {
+        "description": "Active streams without a TV channel, for the dashboard's notice.",
+        "operationId": "get_unassigned_summary_api_v1_channels_unassigned_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnassignedStreamsSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/ApplicationProblem400"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "404": {
+            "$ref": "#/components/responses/ApplicationProblem404"
+          },
+          "409": {
+            "$ref": "#/components/responses/ApplicationProblem409"
+          },
+          "422": {
+            "$ref": "#/components/responses/ApplicationProblem422"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Get Unassigned Summary",
         "tags": [
           "channels"
         ],
@@ -21839,6 +23046,298 @@
         "tags": [
           "config",
           "config"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/device-playlists": {
+      "get": {
+        "operationId": "list_playlists_api_v1_device_playlists_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DevicePlaylistOut"
+                  },
+                  "title": "Response List Playlists Api V1 Device Playlists Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "List Playlists",
+        "tags": [
+          "device-playlists"
+        ],
+        "x-access-class": "management"
+      },
+      "post": {
+        "operationId": "create_playlist_api_v1_device_playlists_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevicePlaylistCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevicePlaylistOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Create Playlist",
+        "tags": [
+          "device-playlists"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/device-playlists/groups": {
+      "get": {
+        "operationId": "list_groups_api_v1_device_playlists_groups_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelGroupOut"
+                  },
+                  "title": "Response List Groups Api V1 Device Playlists Groups Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "List Groups",
+        "tags": [
+          "device-playlists"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/device-playlists/{playlist_id}": {
+      "delete": {
+        "operationId": "delete_playlist_api_v1_device_playlists__playlist_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Delete Playlist",
+        "tags": [
+          "device-playlists"
+        ],
+        "x-access-class": "management"
+      },
+      "get": {
+        "operationId": "get_playlist_api_v1_device_playlists__playlist_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevicePlaylistOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Get Playlist",
+        "tags": [
+          "device-playlists"
+        ],
+        "x-access-class": "management"
+      },
+      "put": {
+        "operationId": "update_playlist_api_v1_device_playlists__playlist_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevicePlaylistUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevicePlaylistOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Update Playlist",
+        "tags": [
+          "device-playlists"
         ],
         "x-access-class": "management"
       }
@@ -26020,6 +27519,15 @@
               "title": "Refresh",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Device playlist id: leaves out its disabled groups and channels.",
+            "in": "query",
+            "name": "list",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -26336,6 +27844,15 @@
               "title": "Refresh",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Device playlist id: leaves out its disabled groups and channels.",
+            "in": "query",
+            "name": "list",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -26579,6 +28096,15 @@
               "title": "Refresh",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Device playlist id: leaves out its disabled groups and channels.",
+            "in": "query",
+            "name": "list",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -26709,6 +28235,15 @@
               "default": false,
               "title": "Refresh",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Device playlist id: leaves out its disabled groups and channels.",
+            "in": "query",
+            "name": "list",
+            "required": false,
+            "schema": {
+              "type": "integer"
             }
           }
         ],

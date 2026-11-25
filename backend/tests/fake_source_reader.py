@@ -48,15 +48,17 @@ class FakeReader:
 
 
 def environment(reader, *, candidates, last_resort=(), switch=False, registry=None, probes=None,
-                start_seconds=1, budget_seconds=2):
+                start_seconds=1, budget_seconds=2, card_seconds=0, refresh_while_playing=True):
     """A TunerEnvironment that reads every source through ``reader``.
     ``candidates`` / ``last_resort`` are lists or functions of the channel."""
     def choice(value):
         return value if callable(value) else (lambda _tv: list(value))
     settings = SimpleNamespace(experimental_transcoding=False, plex_compatible_audio=False,
-                               source_start_seconds=start_seconds, startup_budget_seconds=budget_seconds)
+                               source_start_seconds=start_seconds, startup_budget_seconds=budget_seconds,
+                               waiting_card_seconds=card_seconds)
     return TunerEnvironment(
         engine=Mock, settings=lambda: settings, slots=lambda: 1, client_factory=httpx.AsyncClient,
-        switch_on_failure=lambda: switch, candidates=choice(candidates), last_resort=choice(last_resort),
+        switch_on_failure=lambda: switch, refresh_while_playing=lambda: refresh_while_playing,
+        candidates=choice(candidates), last_resort=choice(last_resort),
         reader=lambda _engine, _label: reader, registry=registry or RelayRegistry(),
         probes=probes or SimpleNamespace(start=Mock(return_value=None), stop_channel=Mock()))

@@ -16,7 +16,7 @@ from dataclasses import asdict
 from typing import List
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.orm import Session
@@ -25,7 +25,7 @@ from app.api.error_handlers import APIError
 from app.api.auth import authenticated_player_url
 from app.config.database import SessionLocal, get_db
 from app.repositories.settings_repository import SettingsRepository
-from app.schemas.tuner import TunerSettingsResponse, TunerSettingsUpdate, TunerStatusResponse, TunerUrls
+from app.schemas.tuner import TunerFirstSourceRequest, TunerSettingsResponse, TunerSettingsUpdate, TunerStatusResponse, TunerUrls
 from app.services.engine_client import EngineClient, EngineRefusedError, EngineUnavailableError, playback_client_from_settings
 from app.services.epg_service import EPGService
 from app.services.player_service import player_service
@@ -33,11 +33,15 @@ from app.services.public_url_service import resolve_public_base_url
 from app.services.stream_relay import RELAY_HEADERS, ClosingStreamingResponse, EngineStreamError, relay_engine_stream, relay_registry
 from app.services.tuner_network import get_tuner_gate, require_tuner_network
 from app.services.tuner_service import TunerService, TunerSettings
+from app.services.tuner_playback_service import (
+    CHECKPOINT_SECONDS, REPORTED_OUTCOMES, ViewingCheckpoint, _reported, prefer_recovered_sources,
+    relay_ranked_streams,
+)
 from app.services.channel_session import ChannelSession, NoSourceStarted, NoSources, TunerBusy, TunerEnvironment
-from app.services.tuner_playback_service import CHECKPOINT_SECONDS, ViewingCheckpoint, relay_ranked_streams
 from app.services.ts_clock import ClockWatch, watch_clock
 from app.services.tuner_probe_service import tuner_probe_service
 from app.utils.stream_kind import is_acestream_id, is_http_id
+from app.services import tuner_first_source, tuner_playback_service, waiting_card
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,12 @@ def _tuner_count() -> int:
 
 def _relay_client_factory(**kwargs) -> httpx.AsyncClient:
     return httpx.AsyncClient(**kwargs)
+
+
+def _client_address(request: Request) -> str:
+    """The device a tuner request comes from, as the app sees it ('?' if
+    the server gives no peer). Clients behind the Docker gateway share it."""
+    return request.client.host if request.client else "?"
 
 
 def _validate_content_id(content_id: str) -> str:
@@ -253,7 +263,7 @@ async def tuner_stream(content_id: str, request: Request):
     # follows takes seconds, which is all the room a check-then-act cap needs
     # to be overshot. The relay adopts the claim and releases it when it ends.
     limit = await run_in_threadpool(_tuner_count)
-    peer = request.client.host if request.client else "?"
+    peer = _client_address(request)
     claim = relay_registry.try_open(content_id, f"tuner:{peer}", limit)
     if claim is None:
         raise APIError(
@@ -314,7 +324,7 @@ async def tuner_stream(content_id: str, request: Request):
             async for chunk in iterator:
                 yield chunk
                 played = time.monotonic() - started
-                checkpoint.tick(played, 'jumpy' if clock_watch.jumpy else 'ok')
+                checkpoint.tick(played, _reported('jumpy' if clock_watch.jumpy else 'ok', claim))
         except EngineStreamError as exc:
             # The engine went silent or dropped mid-stream. There is no other
             # source to go on to here, so the stream just ends: a cut, not a
@@ -325,7 +335,9 @@ async def tuner_stream(content_id: str, request: Request):
         finally:
             await iterator.aclose()
             engine.close()
-            if clock_watch.jumpy:
+            if claim.problem:
+                checkpoint.finish(claim.problem, played)
+            elif clock_watch.jumpy:
                 checkpoint.finish('jumpy', clock_watch.watched_seconds)
             elif cut:
                 checkpoint.finish('stall', played)
@@ -335,10 +347,45 @@ async def tuner_stream(content_id: str, request: Request):
     return ClosingStreamingResponse(body(), headers=RELAY_HEADERS)
 
 
+def _setting_on(key: str) -> bool:
+    db = SessionLocal()
+    try:
+        value = SettingsRepository(db).get_setting(key) or "true"
+        return str(value).lower() not in ("false", "0", "no")
+    finally:
+        db.close()
+
+
+def _refresh_while_playing() -> bool:
+    return _setting_on("tuner_refresh_while_playing")
+
+
+def _switch_on_failure() -> bool:
+    # When the playing source stops sending, go on with another one in the
+    # same response instead of ending it. Chosen on 2026-10-14 for the box.
+    return _setting_on("tuner_switch_on_failure")
+
+
+def _channel_candidates(tv_channel_id: int, *, include_offline: bool = False) -> List[str]:
+    db = SessionLocal()
+    try:
+        service = TunerService(db)
+        ids = service.stream_ids(tv_channel_id) if include_offline else service.relay_stream_ids(tv_channel_id)
+        return prefer_recovered_sources(ids)
+    finally:
+        db.close()
+
+
 def _channel_environment() -> TunerEnvironment:
-    """The channel session reads the same configuration as the other relays."""
+    """The channel session reads the same configuration as the other relays,
+    through this module's readers (looked up on each use, as before)."""
     return TunerEnvironment(engine=lambda: _engine(), settings=lambda: _relay_settings(), slots=lambda: _tuner_count(),
-                            client_factory=lambda **kwargs: _relay_client_factory(**kwargs), probes=tuner_probe_service)
+                            client_factory=lambda **kwargs: _relay_client_factory(**kwargs), probes=tuner_probe_service,
+                            switch_on_failure=lambda: _switch_on_failure(),
+                            refresh_while_playing=lambda: _refresh_while_playing(),
+                            candidates=lambda tv_channel_id: _channel_candidates(tv_channel_id),
+                            last_resort=lambda tv_channel_id: _channel_candidates(tv_channel_id, include_offline=True),
+                            relay=lambda *args, **kwargs: relay_ranked_streams(*args, **kwargs))
 
 
 @hdhr_router.head("/channel/{tv_channel_id}.ts", include_in_schema=False)
@@ -346,7 +393,7 @@ def _channel_environment() -> TunerEnvironment:
     summary="TV channel MPEG-TS with automatic source failover",
     responses={200: {"content": {"video/mp2t": {"schema": {"type": "string", "format": "binary"}}}}})
 async def tuner_channel(tv_channel_id: int, request: Request):
-    session = ChannelSession(tv_channel_id, request.client.host if request.client else '?', _channel_environment())
+    session = ChannelSession(tv_channel_id, _client_address(request), _channel_environment())
     try:
         await session.check()
         if request.method == "HEAD":
@@ -363,6 +410,43 @@ async def tuner_channel(tv_channel_id: int, request: Request):
         # sent anything.
         return Response(status_code=200, headers=RELAY_HEADERS)
     return ClosingStreamingResponse(stream, headers=RELAY_HEADERS)
+
+
+# Device protocol for the Kodi skin, like the discovery routes: out of the
+# documented API.
+@hdhr_router.post("/channel/{tv_channel_id}/first-source", status_code=204, include_in_schema=False)
+def choose_first_source(tv_channel_id: int, payload: TunerFirstSourceRequest, request: Request,
+                        db: Session = Depends(get_db)) -> Response:
+    """The next opening of this channel from this device starts with
+    ``payload.source``; the skin then opens the channel through the PVR as
+    always. The rules are tuner_first_source's."""
+    if payload.source not in TunerService(db).stream_ids(tv_channel_id):
+        raise APIError(code="SOURCE_NOT_ON_CHANNEL", message="The source does not belong to this channel",
+                       status_code=404, context={"tv_channel_id": tv_channel_id})
+    tuner_first_source.choose_first_source(_client_address(request), tv_channel_id, payload.source)
+    return Response(status_code=204)
+
+
+@hdhr_router.delete("/channel/{tv_channel_id}/first-source", status_code=204, include_in_schema=False)
+def clear_first_source(tv_channel_id: int, request: Request) -> Response:
+    """«Automatic»: the next opening from this device uses the normal order."""
+    tuner_first_source.clear_choice(_client_address(request), tv_channel_id)
+    return Response(status_code=204)
+
+
+# Device protocol, like the routes above: out of the documented API.
+@hdhr_router.post('/report', include_in_schema=False)
+async def tuner_report(request: Request, problem: str = Query(...)):
+    """The viewer reports the source they are watching now (the Kodi add-on's
+    menu): its viewing is recorded as ``problem``, which counts against the
+    source when sources are ranked next time. 404 when this client is watching nothing."""
+    if problem not in REPORTED_OUTCOMES:
+        raise HTTPException(400, 'Unknown problem')
+    content_id = relay_registry.report(f"tuner:{_client_address(request)}", problem)
+    if content_id is None:
+        raise HTTPException(404, 'Nothing is playing for this client')
+    logger.info("TV relay source reported content_id=%s problem=%s", content_id, problem)
+    return {'content_id': content_id, 'problem': problem}
 
 
 # --- operator API (/api/v1/tuner, token-gated) -------------------------------

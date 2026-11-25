@@ -101,8 +101,8 @@ def test_POR_DEFECTO_A_LOS_20_Y_SE_PUEDE_APAGAR(client):
 
 def test_LA_RUTA_LA_PONE_Y_ALARGA_EL_PLAZO():
     import inspect
-    from app.api.endpoints import tuner
-    source = inspect.getsource(tuner.tuner_channel)
+    from app.services.channel_session import ChannelSession
+    source = inspect.getsource(ChannelSession.start)
     assert 'waiting_card.with_waiting_card(' in source
     assert 'budget = max(budget, int(waiting_card.CARD_SECONDS) - 2)' in source
 
@@ -193,10 +193,10 @@ async def test_SI_LA_FUENTE_ACABA_DURANTE_LA_CARTA_TERMINA_LIMPIO(monkeypatch):
 
 def test_LA_RUTA_LA_PIDE_EN_PLENA_EMISION():
     import inspect
-    from app.api.endpoints import tuner
+    from app.services.channel_session import ChannelSession
     # Exactly when the relay gives the source up: before that, a healthy
     # low-bitrate source is just between two pieces.
-    assert 'midstream_after=tuner_playback_service.STALL_SECONDS' in inspect.getsource(tuner.tuner_channel)
+    assert 'midstream_after=playback.STALL_SECONDS' in inspect.getsource(ChannelSession.start)
 
 
 @pytest.mark.asyncio
@@ -329,9 +329,11 @@ def test_LA_CARTA_FINAL_ES_TS_DE_VERDAD():
 def test_LA_RUTA_PONE_LA_CARTA_FINAL_Y_LA_CLAVE_DEL_CLIENTE():
     import inspect
     from app.api.endpoints import tuner
-    source = inspect.getsource(tuner.tuner_channel)
+    from app.services.channel_session import ChannelSession
+    source = inspect.getsource(ChannelSession.start)
     assert 'end_card=await run_in_threadpool(waiting_card.load_end_card)' in source
-    assert 'key = (_client_address(request), tv_channel_id)' in source and 'key=key' in source
+    assert 'key = (self.client, tv_channel_id)' in source and 'key=key' in source
+    assert 'ChannelSession(tv_channel_id, _client_address(request),' in inspect.getsource(tuner.tuner_channel)
 
 
 def test_DOS_GET_A_UN_CANAL_MUERTO_CARTA_FINAL_Y_NINGUN_SINTONIZADOR_OCUPADO(alembic_db_session, alembic_client, monkeypatch):

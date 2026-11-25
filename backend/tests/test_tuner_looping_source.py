@@ -99,6 +99,22 @@ async def test_a_looping_source_is_not_left_for_one_that_failed_recently(monkeyp
     assert calls.index('good') == 1  # tried only after the loop played out
 
 
+@pytest.mark.asyncio
+async def test_without_midstream_switching_a_looping_source_is_only_kept_behind(monkeypatch):
+    # Leaving would end the response, and Kodi goes back to its menu: the
+    # loop plays out and is only kept behind the others.
+    import app.services.tuner_playback_service as playback
+    calls = []
+    monkeypatch.setattr(playback, 'relay_engine_stream', _relay(calls, {'loop': 'loop', 'good': 'good'}))
+    registry = RelayRegistry()
+    claim = registry.try_open('loop', 'viewer', 1)
+    received = [chunk async for chunk in relay_ranked_streams(
+        Mock(), ['loop', 'good'], 'viewer', claim, registry=registry,
+        attempt_seconds=0.2, startup_budget_seconds=1, switch_midstream=False)]
+    assert calls == ['loop'] and len(received) == 6
+    assert playback.prefer_recovered_sources(['loop', 'good']) == ['good', 'loop']
+
+
 def test_a_looping_source_stays_behind_the_others_for_half_an_hour(monkeypatch):
     import app.services.tuner_playback_service as playback
     now = [5000.0]

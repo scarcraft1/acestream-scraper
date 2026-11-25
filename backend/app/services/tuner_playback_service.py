@@ -415,8 +415,12 @@ async def relay_ranked_streams(
                 # Log the source's own clock jumps (a viewer saw sources jump back
                 # mid-match with no relay switch, and nothing showed it): read-only.
                 clock_watch = ClockWatch(content_id)
+                # A looping source is left only when the next one can play in
+                # this same response: otherwise leaving ends the response, and
+                # Kodi goes back to its menu instead of reconnecting.
                 raw = watch_clock(raw, content_id, clock_watch,
-                                  give_up=lambda cid=content_id: other_source_left(cid))
+                                  give_up=(lambda cid=content_id: other_source_left(cid))
+                                  if switch_midstream else None)
                 checkpoint = ViewingCheckpoint(content_id, tv_channel_id)
                 if experimental_transcoding:
                     iterator = remux_source(raw, version=version, offset=time.monotonic() - started,

@@ -108,6 +108,8 @@ class TunerEnvironment:
     reader: Optional[Callable[[Optional[EngineClient], str], SourceReader]] = None
     registry: RelayRegistry = relay_registry
     probes: object = tuner_probe_service
+    #: The source loop. Default: tuner_playback_service.relay_ranked_streams.
+    relay: Optional[Callable[..., AsyncIterator[bytes]]] = None
 
 
 class NoSources(Exception):
@@ -235,7 +237,8 @@ class ChannelSession:
             budget = relay_settings.startup_budget_seconds
             if card_after > 0:
                 budget = max(budget, int(waiting_card.CARD_SECONDS) - 2)
-            iterator = playback.relay_ranked_streams(
+            relay = env.relay or playback.relay_ranked_streams
+            iterator = relay(
                 None, candidates, label, claim, registry=env.registry, reader=reader,
                 candidate_provider=refreshed_candidates, on_source_failure=refresh_failed_source,
                 experimental_transcoding=experimental_transcoding,

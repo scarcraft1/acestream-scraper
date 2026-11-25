@@ -26,7 +26,7 @@ the stream on a 1080p source.
 """
 import logging
 import time
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -143,10 +143,20 @@ class ClockWatch:
                     self.pcr_samples, self.early_loop)
 
 
+class SourceLooping(Exception):
+    """The source keeps repeating itself and the caller chose to leave it."""
+
+
 async def watch_clock(iterator: AsyncIterator[bytes], content_id: str,
-                      watch: Optional[ClockWatch] = None) -> AsyncIterator[bytes]:
+                      watch: Optional[ClockWatch] = None,
+                      give_up: Optional[Callable[[], bool]] = None) -> AsyncIterator[bytes]:
     """Pass the chunks through unchanged, watching the source's clock. A
-    caller that passes its own ``watch`` can read it when the source ends."""
+    caller that passes its own ``watch`` can read it when the source ends.
+
+    With ``give_up``, a source that turns ``jumpy`` raises SourceLooping
+    when ``give_up()`` is true (24-11: a source looped 27 times in 8 min
+    while the relay kept it). It is asked at each chunk, so a source left on
+    because nothing else was there is dropped once something is."""
     watch = watch or ClockWatch(content_id)
     try:
         async for chunk in iterator:
@@ -154,6 +164,10 @@ async def watch_clock(iterator: AsyncIterator[bytes], content_id: str,
                 watch.feed(chunk)
             except Exception:  # the watch must never break playback
                 logger.debug("TV relay clock watch failed", exc_info=True)
+            if give_up is not None and watch.jumpy and give_up():
+                logger.info("TV relay leaving a looping source content_id=%s back_jumps=%d early_loop=%s",
+                            content_id, watch.back_jumps, watch.early_loop)
+                raise SourceLooping(content_id)
             yield chunk
     finally:
         watch.summary()

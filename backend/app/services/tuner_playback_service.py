@@ -17,7 +17,7 @@ from app.services.source_reader import Attempt, EngineReader, HttpReader, Source
 from app.services.stream_relay import EngineStreamError, RelayInfo, RelayRegistry, relay_engine_stream, relay_registry
 from app.services.tuner_remux import remux_source, compatible_audio_source
 from app.services.tuner_http_source import relay_http_stream
-from app.services.ts_clock import ClockWatch, watch_clock
+from app.services.ts_clock import ClockWatch, SourceLooping, watch_clock
 from app.services.ts_nulls import drop_null_packets
 
 STARTUP_BUDGET_SECONDS = 45.0
@@ -67,12 +67,18 @@ EARLY_DEATH_COOLDOWN_SECONDS = 1800.0
 # An engine session that ends at once keeps the plain cooldown: it is often the
 # previous viewing's session still closing, not the source.
 NO_DATA_COOLDOWN_SECONDS = 600.0
+# A source that repeats itself (ClockWatch.jumpy) stays behind the others as
+# long as an early death: on 24-11 one that had looped for 8 min was chosen
+# again 5 min later. Behind, not out: with nothing else it still plays.
+JUMPY_COOLDOWN_SECONDS = 1800.0
 
 
 def record_source_failure(content_id: str, cooldown: float = FAILURE_COOLDOWN_SECONDS) -> None:
     with _failure_lock:
         # Stored as if it had failed later, so the usual cooldown lasts `cooldown`.
-        _failures[content_id] = time.monotonic() + cooldown - FAILURE_COOLDOWN_SECONDS
+        # A shorter failure never cuts a longer cooldown still running.
+        _failures[content_id] = max(time.monotonic() + cooldown - FAILURE_COOLDOWN_SECONDS,
+                                    _failures.get(content_id, float('-inf')))
         _failures.move_to_end(content_id)
         while len(_failures) > 4096:
             _failures.popitem(last=False)
@@ -327,6 +333,13 @@ async def relay_ranked_streams(
 
     last_resort: list[str] = []
     last_resort_taken = False
+    # A source left because it looped while others were there to try: played
+    # again if none of them plays, before the channel is given up.
+    looping: str | None = None
+
+    def other_source_left(content_id: str) -> bool:
+        return any(cid != content_id and cid not in attempted and not failed_recently(cid)
+                   for cid in candidates)
 
     async def take_last_resort() -> bool:
         nonlocal last_resort, last_resort_taken
@@ -352,6 +365,9 @@ async def relay_ranked_streams(
                     return
                 candidates = prefer_recovered_sources(list(dict.fromkeys(list(candidates) + last_resort)))
                 pending = [cid for cid in candidates if cid not in attempted]
+                if not pending and looping in attempted:
+                    attempted.discard(looping)
+                    pending, looping = [looping], None
                 if not pending:
                     if candidate_provider is None:
                         break
@@ -399,7 +415,8 @@ async def relay_ranked_streams(
                 # Log the source's own clock jumps (a viewer saw sources jump back
                 # mid-match with no relay switch, and nothing showed it): read-only.
                 clock_watch = ClockWatch(content_id)
-                raw = watch_clock(raw, content_id, clock_watch)
+                raw = watch_clock(raw, content_id, clock_watch,
+                                  give_up=lambda cid=content_id: other_source_left(cid))
                 checkpoint = ViewingCheckpoint(content_id, tv_channel_id)
                 if experimental_transcoding:
                     iterator = remux_source(raw, version=version, offset=time.monotonic() - started,
@@ -431,7 +448,8 @@ async def relay_ranked_streams(
                         if opening is not None and opening.superseded:
                             # The newer GET plays this source too: Kodi left this one.
                             return
-                except (EngineRefusedError, EngineUnavailableError, EngineStreamError, StopAsyncIteration, TimeoutError) as exc:
+                except (EngineRefusedError, EngineUnavailableError, EngineStreamError, StopAsyncIteration, TimeoutError,
+                        SourceLooping) as exc:
                     empty_start = (isinstance(exc, StopAsyncIteration) and first_at is None
                                    and content_id not in retried_empty
                                    and time.monotonic() - attempt_started < EMPTY_START_RETRY_SECONDS
@@ -444,11 +462,15 @@ async def relay_ranked_streams(
                         logger.info('TV relay source %s ended empty at start; retrying it once', content_id)
                         continue
                     played = (last_at - first_at) if first_at is not None else 0.0
-                    early_death = first_at is not None and played < EARLY_DEATH_SECONDS
+                    left_looping = isinstance(exc, SourceLooping)
+                    if left_looping:
+                        looping = content_id
+                    early_death = first_at is not None and played < EARLY_DEATH_SECONDS and not left_looping
                     record_source_failure(content_id, EARLY_DEATH_COOLDOWN_SECONDS if early_death else
                                           NO_DATA_COOLDOWN_SECONDS if first_at is None and isinstance(exc, TimeoutError) else
                                           FAILURE_COOLDOWN_SECONDS)
                     outcome = (
+                        'jumpy' if left_looping else
                         'early_death' if early_death else
                         'stall' if first_at is not None and isinstance(exc, TimeoutError) else
                         'ended' if first_at is not None else
@@ -469,6 +491,7 @@ async def relay_ranked_streams(
                     # Do not include upstream exception text: it can contain URLs
                     # with credentials. Keep EOF distinct from our read deadline.
                     reason = (
+                        'looping' if left_looping else
                         'read_timeout' if isinstance(exc, TimeoutError) else
                         'upstream_eof' if isinstance(exc, StopAsyncIteration) else
                         'engine_refused' if isinstance(exc, EngineRefusedError) else
@@ -481,6 +504,8 @@ async def relay_ranked_streams(
                         route, experimental_transcoding,
                     )
                 finally:
+                    if clock_watch.jumpy:
+                        record_source_failure(content_id, JUMPY_COOLDOWN_SECONDS)
                     if outcome is None and first_at is not None:
                         # The viewer left, or a newer GET took over.
                         _record_ok(opening, content_id, tv_channel_id, last_at - first_at,
@@ -512,6 +537,13 @@ async def relay_ranked_streams(
                         break
             # Out of candidates: the channel's sources not tried yet, offline
             # ones too, within what is left of the budget.
+            if looping in attempted and not (opening is not None and opening.superseded):
+                # Nothing else played: the looping source rather than no picture.
+                attempted.discard(looping)
+                candidates = [looping] + [cid for cid in candidates if cid != looping]
+                looping = None
+                deadline = max(deadline, time.monotonic() + attempt_seconds)
+                continue
             if time.monotonic() >= deadline or not await take_last_resort():
                 break
         raise EngineStreamError('No source could sustain TV channel playback within the recovery budget')

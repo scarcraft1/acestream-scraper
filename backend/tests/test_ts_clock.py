@@ -193,3 +193,37 @@ def test_a_failing_watch_never_breaks_playback(caplog):
     with caplog.at_level(logging.DEBUG, logger=ts_clock.__name__):
         assert asyncio.run(collect()) == [b'one', b'two']
     assert 'TV relay clock watch failed' in caplog.text
+
+
+def _looping_source():
+    async def source():
+        for t in (100.0, 100.5, 95.0, 95.5, 90.0, 90.5):
+            yield _chunk(t)
+    return source()
+
+
+def test_a_looping_source_is_left_when_the_caller_says_so(caplog):
+    from app.services.ts_clock import SourceLooping
+
+    async def collect(received):
+        async for chunk in watch_clock(_looping_source(), "abc", give_up=lambda: True):
+            received.append(chunk)
+
+    received = []
+    with caplog.at_level(logging.INFO, logger=ts_clock.__name__):
+        try:
+            asyncio.run(collect(received))
+        except SourceLooping:
+            pass
+        else:
+            raise AssertionError("the looping source was not left")
+    # Left at the chunk that made it jumpy (the second jump back), not before.
+    assert len(received) == 4
+    assert "TV relay leaving a looping source content_id=abc back_jumps=2" in caplog.text
+
+
+def test_a_looping_source_plays_on_when_there_is_nothing_else():
+    async def collect():
+        return [c async for c in watch_clock(_looping_source(), "abc", give_up=lambda: False)]
+
+    assert len(asyncio.run(collect())) == 6

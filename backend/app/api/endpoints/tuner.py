@@ -384,7 +384,8 @@ def _channel_environment() -> TunerEnvironment:
                             switch_on_failure=lambda: _switch_on_failure(),
                             refresh_while_playing=lambda: _refresh_while_playing(),
                             candidates=lambda tv_channel_id: _channel_candidates(tv_channel_id),
-                            last_resort=lambda tv_channel_id: _channel_candidates(tv_channel_id, include_offline=True))
+                            last_resort=lambda tv_channel_id: _channel_candidates(tv_channel_id, include_offline=True),
+                            relay=lambda *args, **kwargs: relay_ranked_streams(*args, **kwargs))
 
 
 @hdhr_router.head("/channel/{tv_channel_id}.ts", include_in_schema=False)

@@ -25,6 +25,7 @@ from aiohttp.test_utils import TestServer
 from app.models.models import AcestreamChannel, TVChannel
 from app.repositories.settings_repository import SettingsRepository
 from app.services import tuner_playback_service as playback
+from app.services import waiting_card
 from app.services.tuner_probe_service import tuner_probe_service
 
 A, B, C = 'a' * 40, 'b' * 40, 'c' * 40
@@ -227,20 +228,23 @@ async def test_first_source_refused_and_second_plays(tuner):
 
 
 @pytest.mark.asyncio
-async def test_source_cut_midway_ends_the_response(tuner):
-    """Without the midstream switch (off by default) the response ends where
-    the source did, and the next source is left for the client's reconnect."""
+async def test_source_cut_midway_switches_to_the_next_source(tuner):
+    """The fork switches mid-response by default (develop ends the response
+    where the source did): A's bytes, then B's, in the same response."""
     app, db, outcomes, refreshes = tuner
     async with FakeEngine() as engine, served(app) as base:
         configure(db, engine.url)
         engine.behave(A, 'cut')
         tv = seed(db, [(A, True, 3000, None), (B, True, 2000, None)])
-        status, headers, body = await watch(base, tv)
+        cut = chunk_of(A) * CUT_CHUNKS
+        status, headers, body = await watch(base, tv, take=len(cut) + len(chunk_of(B)))
         await asyncio.sleep(SETTLE)
     assert (status, headers) == (200, RELAY_HEADERS)
-    assert body == chunk_of(A) * CUT_CHUNKS
-    assert engine.calls == [('start', 'a', 's1'), ('read', 'a', 's1'), ('stop', 'a', 's1')]
-    assert outcomes == [(A, 'early_death')]
+    assert body[:len(cut)] == cut
+    assert body[len(cut):len(cut) + len(chunk_of(B))] == chunk_of(B)
+    assert engine.calls == [('start', 'a', 's1'), ('read', 'a', 's1'), ('stop', 'a', 's1'),
+                            ('start', 'b', 's2'), ('read', 'b', 's2'), ('stop', 'b', 's2')]
+    assert outcomes == [(A, 'early_death'), (B, 'ok')]
     assert refreshes == [tv, tv]
 
 
@@ -264,7 +268,9 @@ async def test_all_candidates_fail_and_the_last_resort_plays(tuner):
 
 
 @pytest.mark.asyncio
-async def test_every_source_fails_is_a_502(tuner):
+async def test_every_source_fails_sends_the_end_card(tuner):
+    """Develop answers 502; the fork sends its end card and ends cleanly, so
+    Kodi goes back to the menu without an error dialog."""
     app, db, outcomes, refreshes = tuner
     async with FakeEngine() as engine, served(app) as base:
         configure(db, engine.url)
@@ -273,8 +279,8 @@ async def test_every_source_fails_is_a_502(tuner):
         tv = seed(db, [(A, True, 3000, None), (C, False, 9000, None)])
         status, headers, body = await watch(base, tv)
         await asyncio.sleep(SETTLE)
-    assert (status, headers['content-type']) == (502, 'application/json')
-    assert b'CHANNEL_STREAM_FAILED' in body
+    assert (status, headers) == (200, RELAY_HEADERS)
+    assert body == waiting_card.load_end_card()
     assert engine.calls == [('start', 'a', None), ('start', 'c', None)]
     assert outcomes == [(A, 'engine_refused'), (C, 'engine_refused')]
     assert refreshes == [tv, tv, tv]

@@ -12460,6 +12460,49 @@
         "title": "StreamCheckScope",
         "type": "object"
       },
+      "StreamCheckViewing": {
+        "description": "What the scheduled stream check does while someone is watching.\n\n``pause`` waits for the viewer (for metered connections); ``slow`` keeps\nchecking with a gap between sources; ``continuous`` also starts the next\npass as soon as one ends. The last two need a dedicated checking engine.",
+        "properties": {
+          "mode": {
+            "enum": [
+              "pause",
+              "slow",
+              "continuous"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "StreamCheckViewing",
+        "type": "object"
+      },
+      "StreamCheckViewingResponse": {
+        "properties": {
+          "dedicated_checker": {
+            "description": "Whether a dedicated checking engine is configured",
+            "title": "Dedicated Checker",
+            "type": "boolean"
+          },
+          "mode": {
+            "enum": [
+              "pause",
+              "slow",
+              "continuous"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "dedicated_checker"
+        ],
+        "title": "StreamCheckViewingResponse",
+        "type": "object"
+      },
       "StreamStats": {
         "properties": {
           "download_speed_kbytes_sec": {
@@ -22909,6 +22952,94 @@
           }
         },
         "summary": "Set Stream Check Scope",
+        "tags": [
+          "config",
+          "config"
+        ],
+        "x-access-class": "management"
+      }
+    },
+    "/api/v1/config/stream-check-viewing": {
+      "get": {
+        "operationId": "get_stream_check_viewing_api_v1_config_stream_check_viewing_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamCheckViewingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Get Stream Check Viewing",
+        "tags": [
+          "config",
+          "config"
+        ],
+        "x-access-class": "management"
+      },
+      "put": {
+        "operationId": "set_stream_check_viewing_api_v1_config_stream_check_viewing_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StreamCheckViewing"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamCheckViewingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "$ref": "#/components/responses/ApplicationProblem401"
+          },
+          "403": {
+            "$ref": "#/components/responses/ApplicationProblem403"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/ApplicationProblem500"
+          },
+          "503": {
+            "$ref": "#/components/responses/ApplicationProblem503"
+          }
+        },
+        "summary": "Set Stream Check Viewing",
         "tags": [
           "config",
           "config"

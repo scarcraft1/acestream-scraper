@@ -26,6 +26,8 @@ from app.schemas.config import (
     RescrapeIntervalUpdate,
     ScheduleAnchors,
     StreamCheckScope,
+    StreamCheckViewing,
+    StreamCheckViewingResponse,
     SettingResponse,
     SettingsResponse,
 )
@@ -362,6 +364,16 @@ def get_stream_check_scope(config: ConfigService = Depends(get_config_service)):
 @router.put("/stream-check-scope", response_model=StreamCheckScope)
 def set_stream_check_scope(update: StreamCheckScope, config: ConfigService = Depends(get_config_service)):
     return config.set_stream_check_scope(update)
+
+
+@router.get("/stream-check-viewing", response_model=StreamCheckViewingResponse)
+def get_stream_check_viewing(config: ConfigService = Depends(get_config_service)):
+    return config.get_stream_check_viewing()
+
+
+@router.put("/stream-check-viewing", response_model=StreamCheckViewingResponse)
+def set_stream_check_viewing(update: StreamCheckViewing, config: ConfigService = Depends(get_config_service)):
+    return config.set_stream_check_viewing(update)
 
 
 @router.get("/{key}", response_model=SettingResponse)

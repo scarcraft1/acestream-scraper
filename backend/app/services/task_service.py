@@ -258,6 +258,21 @@ class TaskService:
                 self._maintenance_condition.wait(timeout=.25)
             return not self.shutdown_event.is_set()
 
+    def maintenance_waiting(self) -> bool:
+        """Whether another maintenance job is queued behind the running one."""
+        with self._maintenance_condition:
+            return len(self._maintenance_queue) > 1
+
+    def run_again_in(self, job_id: str, seconds: float) -> bool:
+        """Bring the next run of ``job_id`` forward to ``seconds`` from now.
+
+        Jobs queued meanwhile run first: the maintenance queue is FIFO.
+        """
+        if not self.scheduler.running or self.scheduler.get_job(job_id) is None:
+            return False
+        self.scheduler.modify_job(job_id, next_run_time=datetime.now(timezone.utc) + timedelta(seconds=seconds))
+        return True
+
     def _release_maintenance(self, ticket):
         with self._maintenance_condition:
             if ticket in self._maintenance_queue:

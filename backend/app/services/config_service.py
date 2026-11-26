@@ -8,7 +8,7 @@ import re
 
 from app.repositories.settings_repository import SettingsRepository
 from app.config.version import get_app_version
-from app.schemas.config import PlaybackRouting, StreamCheckScope
+from app.schemas.config import PlaybackRouting, StreamCheckScope, StreamCheckViewing, StreamCheckViewingResponse
 from app.services.public_url_service import InvalidPublicBaseUrl, normalize_public_base_url
 
 # How a hidden secret reads in the API.
@@ -178,6 +178,27 @@ class ConfigService:
         if not self.settings_repo.set_setting(SettingsRepository.STREAM_CHECK_SCOPE, config.scope):
             raise HTTPException(status_code=500, detail="Failed to save stream check scope")
         return config
+
+    def get_stream_check_viewing(self) -> StreamCheckViewingResponse:
+        from app.services.check_engine_config_service import CheckEngineConfigService
+        saved = self.settings_repo.get_setting(SettingsRepository.STREAM_CHECK_VIEWING, "pause")
+        mode = saved if saved in ("pause", "slow", "continuous") else "pause"
+        dedicated = CheckEngineConfigService(self.settings_repo).get().use_dedicated
+        return StreamCheckViewingResponse(mode=mode, dedicated_checker=dedicated)
+
+    def effective_stream_check_viewing(self) -> str:
+        """The saved mode, or ``pause`` when no dedicated checker is configured:
+        checks on the playback engine would compete with the viewer."""
+        config = self.get_stream_check_viewing()
+        return config.mode if config.dedicated_checker else "pause"
+
+    def set_stream_check_viewing(self, config: StreamCheckViewing) -> StreamCheckViewingResponse:
+        if config.mode != "pause" and not self.get_stream_check_viewing().dedicated_checker:
+            raise HTTPException(status_code=422, detail="Checking while watching needs a dedicated checking engine")
+        if not self.settings_repo.set_setting(SettingsRepository.STREAM_CHECK_VIEWING, config.mode,
+                                              "Stream checks while watching"):
+            raise HTTPException(status_code=500, detail="Failed to save stream checks while watching")
+        return self.get_stream_check_viewing()
 
     def get_channel_status_interval(self) -> int:
         try:

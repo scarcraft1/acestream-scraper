@@ -23,7 +23,7 @@ jest.mock('../services/guideSetupService', () => ({ guideSetupService: { config:
 jest.mock('../hooks/useBaseUrls');
 jest.mock('../components/recordings/RecordingSettingsFields', () => ({ __esModule: true, default: () => <div>Recording settings</div> }));
 jest.mock('../services/configService', () => ({
-  configService: { getStreamCheckScope: jest.fn().mockResolvedValue({ scope: 'all' }), updateStreamCheckScope: jest.fn(), getAppId: jest.fn(), updateAppId: jest.fn(), getNotificationWebhookUrl: jest.fn().mockResolvedValue('') },
+  configService: { getStreamCheckScope: jest.fn().mockResolvedValue({ scope: 'all' }), updateStreamCheckScope: jest.fn(), getStreamCheckViewing: jest.fn().mockResolvedValue({ mode: 'pause', dedicated_checker: false }), updateStreamCheckViewing: jest.fn(), getAppId: jest.fn(), updateAppId: jest.fn(), getNotificationWebhookUrl: jest.fn().mockResolvedValue('') },
   getScheduleAnchors: jest.fn().mockResolvedValue({ timezone: 'UTC', url_scraping: null, epg_refresh: null, channel_status: null }),
   saveScheduleAnchors: jest.fn(),
   getOfflineCleanup: jest.fn().mockResolvedValue({ enabled: false, offline_days: 14, interval_days: 7, remove_linked: false, rescrape: true }),
@@ -107,6 +107,25 @@ describe('Settings page', () => {
     fireEvent.change(selector, { target: { value: scope } });
     await waitFor(() => expect(selector).toHaveValue(scope));
     expect(jest.mocked(configService.updateStreamCheckScope).mock.calls[0][0]).toEqual({ scope });
+  });
+
+  it('offers checks while watching only with a dedicated checker', async () => {
+    renderPage('automation');
+    const selector = await screen.findByRole('combobox', { name: 'While watching' });
+    expect(selector).toHaveValue('pause');
+    expect(screen.getByRole('option', { name: 'Keep checking slowly' })).toBeDisabled();
+    expect(screen.getByText('Checking while watching needs a dedicated checking engine.')).toBeInTheDocument();
+  });
+
+  it('saves continuous checks while watching when a dedicated checker exists', async () => {
+    jest.mocked(configService.getStreamCheckViewing).mockResolvedValueOnce({ mode: 'pause', dedicated_checker: true });
+    jest.mocked(configService.updateStreamCheckViewing).mockResolvedValue({ mode: 'continuous', dedicated_checker: true });
+    renderPage('automation');
+    const selector = await screen.findByRole('combobox', { name: 'While watching' });
+    expect(screen.getByRole('option', { name: 'Check continuously, slowly while watching' })).toBeEnabled();
+    fireEvent.change(selector, { target: { value: 'continuous' } });
+    await waitFor(() => expect(selector).toHaveValue('continuous'));
+    expect(jest.mocked(configService.updateStreamCheckViewing).mock.calls[0][0]).toEqual({ mode: 'continuous' });
   });
 
   it('opens network controls directly from their Settings tab without the wizard', async () => {

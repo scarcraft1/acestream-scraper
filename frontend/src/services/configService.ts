@@ -5,6 +5,16 @@ type StreamCheckScope = components['schemas']['StreamCheckScope'];
 export type CheckEngineConfig = components['schemas']['CheckEngineConfigResponse'];
 export type PlaybackRouting = components['schemas']['PlaybackRouting'];
 
+export type StreamCheckViewingMode = 'pause' | 'slow' | 'continuous';
+
+export interface StreamCheckViewing {
+  mode: StreamCheckViewingMode;
+}
+
+export interface StreamCheckViewingResponse extends StreamCheckViewing {
+  dedicated_checker: boolean;
+}
+
 export interface Setting {
   value: string;
 }
@@ -53,6 +63,8 @@ const BASE_URL = '/v1/config';
 export const configService = {
   getStreamCheckScope: async () => (await apiClient.get<StreamCheckScope>(`${BASE_URL}/stream-check-scope`)).data,
   updateStreamCheckScope: async (config: StreamCheckScope) => (await apiClient.put<StreamCheckScope>(`${BASE_URL}/stream-check-scope`, config)).data,
+  getStreamCheckViewing: async (): Promise<StreamCheckViewingResponse> => (await apiClient.get<StreamCheckViewingResponse>(`${BASE_URL}/stream-check-viewing`)).data,
+  updateStreamCheckViewing: async (config: StreamCheckViewing): Promise<StreamCheckViewingResponse> => (await apiClient.put<StreamCheckViewingResponse>(`${BASE_URL}/stream-check-viewing`, config)).data,
   getCheckEngine: async (): Promise<CheckEngineConfig> => (await apiClient.get<CheckEngineConfig>(`${BASE_URL}/check-engine`)).data,
   updateCheckEngine: async (config: CheckEngineConfig): Promise<CheckEngineConfig> => (await apiClient.put<CheckEngineConfig>(`${BASE_URL}/check-engine`, { use_dedicated: config.use_dedicated, url: config.url })).data,
   getPlaybackRouting: async (): Promise<PlaybackRouting> => {

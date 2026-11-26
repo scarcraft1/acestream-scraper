@@ -2896,5 +2896,14 @@
   "Delete playlist": "Eliminar lista",
   "{{value0}} · {{value1}} channels": "{{value0}} · {{value1}} canales",
   "Leaves out the groups and channels disabled for that device.": "Deja fuera los grupos y canales desactivados para ese aparato.",
-  "A device playlist lists TV channels only.": "Una lista por aparato solo incluye canales de TV."
+  "A device playlist lists TV channels only.": "Una lista por aparato solo incluye canales de TV.",
+  "Loading checks while watching": "Cargando comprobaciones durante la reproducción",
+  "Could not load checks while watching.": "No se pudieron cargar las comprobaciones durante la reproducción.",
+  "While watching": "Durante la reproducción",
+  "Slow: one stream every 30 s while a channel plays, at full speed otherwise.": "Despacio: un stream cada 30 s mientras se ve un canal; el resto del tiempo, sin espera.",
+  "Checking while watching needs a dedicated checking engine.": "Comprobar durante la reproducción requiere un motor de comprobación dedicado.",
+  "Pause checks (metered connection)": "Pausar comprobaciones (conexión medida)",
+  "Keep checking slowly": "Seguir comprobando despacio",
+  "Check continuously, slowly while watching": "Comprobar sin parar, despacio durante la reproducción",
+  "Could not save checks while watching. Try again.": "No se pudieron guardar las comprobaciones durante la reproducción."
 }

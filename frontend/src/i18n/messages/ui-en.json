@@ -2896,5 +2896,14 @@
   "Delete playlist": "Delete playlist",
   "{{value0}} · {{value1}} channels": "{{value0}} · {{value1}} channels",
   "Leaves out the groups and channels disabled for that device.": "Leaves out the groups and channels disabled for that device.",
-  "A device playlist lists TV channels only.": "A device playlist lists TV channels only."
+  "A device playlist lists TV channels only.": "A device playlist lists TV channels only.",
+  "Loading checks while watching": "Loading checks while watching",
+  "Could not load checks while watching.": "Could not load checks while watching.",
+  "While watching": "While watching",
+  "Slow: one stream every 30 s while a channel plays, at full speed otherwise.": "Slow: one stream every 30 s while a channel plays, at full speed otherwise.",
+  "Checking while watching needs a dedicated checking engine.": "Checking while watching needs a dedicated checking engine.",
+  "Pause checks (metered connection)": "Pause checks (metered connection)",
+  "Keep checking slowly": "Keep checking slowly",
+  "Check continuously, slowly while watching": "Check continuously, slowly while watching",
+  "Could not save checks while watching. Try again.": "Could not save checks while watching. Try again."
 }

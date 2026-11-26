@@ -125,8 +125,9 @@ def test_a_database_at_the_box_merge_revision_still_gets_the_epg_identities(tmp_
 
 def test_box_revision_follows_the_history_and_downgrades_to_it(tmp_path):
     """20261104_1200 is the fork's empty revision the box already records: a
-    database there reaches the merge head with develop's offline column, and
-    going back leaves the history table in place."""
+    database there reaches the merge head with develop's health columns (and
+    without offline_since, which develop drops), and going back leaves the
+    history table in place."""
     import sqlite3
     from contextlib import closing
     path = tmp_path / 'box.db'
@@ -139,7 +140,8 @@ def test_box_revision_follows_the_history_and_downgrades_to_it(tmp_path):
 
     assert version() == current_head_revision()
     engine = create_engine(database_url_for(path))
-    assert 'offline_since' in {c['name'] for c in inspect(engine).get_columns('acestream_channels')}
+    columns = {c['name'] for c in inspect(engine).get_columns('acestream_channels')}
+    assert {'last_worked_at', 'failing_since'} <= columns and 'offline_since' not in columns
     engine.dispose()
     downgrade_to_revision(path, '20261102_1200')
     assert version() == '20261102_1200'

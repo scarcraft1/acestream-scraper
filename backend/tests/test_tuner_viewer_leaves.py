@@ -9,6 +9,7 @@ import asyncio
 import pytest
 from aiohttp import web
 
+from app.services import playback_ownership
 from app.services.stream_relay import relay_registry
 from app.services.tuner_probe_service import tuner_probe_service
 from tests.test_tuner_channel_transport import A, B, FakeEngine, chunk_of, configure, seed, served, tuner, watch  # noqa: F401
@@ -53,6 +54,13 @@ async def wait_for(condition, seconds):
     return condition()
 
 
+def no_deferred_stop():
+    """The fork defers the engine stop by the linger; it has to fire while
+    the fake engine is still there, or conftest fails the test."""
+    return not any(source.pending_stop is not None and source.pending_stop.is_alive()
+                   for source in playback_ownership._sources.values())
+
+
 @pytest.fixture
 def stops(monkeypatch):
     calls = []
@@ -69,6 +77,7 @@ async def test_viewer_leaving_while_it_plays_stops_the_channel_refresh(tuner, st
         await watch(base, tv, take=1)
         assert await wait_for(lambda: stops, 3)
         assert await wait_for(lambda: not relay_registry.active(), 3)
+        assert await wait_for(no_deferred_stop, 3)
     assert stops == [tv]
 
 
@@ -81,4 +90,5 @@ async def test_viewer_leaving_while_the_channel_opens_stops_the_channel_refresh(
         await leave_while_opening(base, tv, after=0.5)
         assert await wait_for(lambda: stops, FIRST_BYTE_DELAY + 3)
         assert await wait_for(lambda: not relay_registry.active(), 3)
+        assert await wait_for(no_deferred_stop, 3)
     assert stops == [tv]

@@ -1723,6 +1723,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config/stream-check-viewing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stream Check Viewing */
+        get: operations["get_stream_check_viewing_api_v1_config_stream_check_viewing_get"];
+        /** Set Stream Check Viewing */
+        put: operations["set_stream_check_viewing_api_v1_config_stream_check_viewing_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config/{key}": {
         parameters: {
             query?: never;
@@ -10223,6 +10241,34 @@ export interface components {
              */
             scope: "all" | "assigned" | "favorites";
         };
+        /**
+         * StreamCheckViewing
+         * @description What the scheduled stream check does while someone is watching.
+         *
+         *     ``pause`` waits for the viewer (for metered connections); ``slow`` keeps
+         *     checking with a gap between sources; ``continuous`` also starts the next
+         *     pass as soon as one ends. The last two need a dedicated checking engine.
+         */
+        StreamCheckViewing: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "pause" | "slow" | "continuous";
+        };
+        /** StreamCheckViewingResponse */
+        StreamCheckViewingResponse: {
+            /**
+             * Dedicated Checker
+             * @description Whether a dedicated checking engine is configured
+             */
+            dedicated_checker: boolean;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "pause" | "slow" | "continuous";
+        };
         /** StreamStats */
         StreamStats: {
             /**
@@ -15495,6 +15541,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StreamCheckScope"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    get_stream_check_viewing_api_v1_config_stream_check_viewing_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamCheckViewingResponse"];
+                };
+            };
+            401: components["responses"]["ApplicationProblem401"];
+            403: components["responses"]["ApplicationProblem403"];
+            500: components["responses"]["ApplicationProblem500"];
+            503: components["responses"]["ApplicationProblem503"];
+        };
+    };
+    set_stream_check_viewing_api_v1_config_stream_check_viewing_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamCheckViewing"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamCheckViewingResponse"];
                 };
             };
             401: components["responses"]["ApplicationProblem401"];

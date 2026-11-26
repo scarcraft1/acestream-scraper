@@ -42,6 +42,12 @@ QUIET_SECONDS = 10.0             # at most one line per jump burst
 EARLY_SECONDS = 30.0             # from the first PCR of this attempt
 EARLY_MIN_BACK = 10.0
 EARLY_MAX_BACK = 1800.0
+# 25-11: a source stepped ahead 3-7 s 52 times in 21 min and the viewer saw
+# it stop and jump; the one that played well after it did so twice in 50
+# min, and one with 13 in 27 min played fine. STUTTER_STEPS in STUTTER_WINDOW
+# sits between them (about one step every 30 s).
+STUTTER_STEPS = 10
+STUTTER_WINDOW = 300.0
 
 
 def _sync_offset(chunk: bytes) -> Optional[int]:
@@ -75,12 +81,25 @@ class ClockWatch:
         self.pcr_samples = 0
         self.worst_back = 0.0
         self.forward_steps = 0
+        self._step_times = []
         self.first_at = None
         self.last_at = None
 
     @property
     def jumpy(self) -> bool:
         return self.back_jumps >= JUMPY_BACK_JUMPS or self.early_loop
+
+    @property
+    def stuttering(self) -> bool:
+        """Stepping ahead often: the viewer sees the picture stop and jump."""
+        if self.last_at is None:
+            return False
+        since = self.last_at - STUTTER_WINDOW
+        return sum(1 for t in self._step_times if t >= since) >= STUTTER_STEPS
+
+    @property
+    def doubtful(self) -> bool:
+        return self.jumpy or self.stuttering
 
     @property
     def watched_seconds(self) -> float:
@@ -125,6 +144,7 @@ class ClockWatch:
                 self._report("TV relay source clock jumped ahead %.1f s content_id=%s", delta - elapsed)
             elif delta > STEP_SECONDS:
                 self.forward_steps += 1
+                self._step_times = [t for t in self._step_times if t >= now - STUTTER_WINDOW] + [now]
                 self._report("TV relay source clock stepped ahead %.1f s content_id=%s", delta)
         self._last, self._last_at = seconds, now
 
@@ -147,6 +167,10 @@ class SourceLooping(Exception):
     """The source keeps repeating itself and the caller chose to leave it."""
 
 
+class SourceStuttering(SourceLooping):
+    """The source keeps stepping ahead and the caller chose to leave it."""
+
+
 async def watch_clock(iterator: AsyncIterator[bytes], content_id: str,
                       watch: Optional[ClockWatch] = None,
                       give_up: Optional[Callable[[], bool]] = None) -> AsyncIterator[bytes]:
@@ -154,6 +178,7 @@ async def watch_clock(iterator: AsyncIterator[bytes], content_id: str,
     caller that passes its own ``watch`` can read it when the source ends.
 
     With ``give_up``, a source that turns ``jumpy`` raises SourceLooping
+    (``stuttering``: SourceStuttering)
     when ``give_up()`` is true (24-11: a source looped 27 times in 8 min
     while the relay kept it). It is asked at each chunk, so a source left on
     because nothing else was there is dropped once something is."""
@@ -164,10 +189,14 @@ async def watch_clock(iterator: AsyncIterator[bytes], content_id: str,
                 watch.feed(chunk)
             except Exception:  # the watch must never break playback
                 logger.debug("TV relay clock watch failed", exc_info=True)
-            if give_up is not None and watch.jumpy and give_up():
-                logger.info("TV relay leaving a looping source content_id=%s back_jumps=%d early_loop=%s",
-                            content_id, watch.back_jumps, watch.early_loop)
-                raise SourceLooping(content_id)
+            if give_up is not None and watch.doubtful and give_up():
+                if watch.jumpy:
+                    logger.info("TV relay leaving a looping source content_id=%s back_jumps=%d early_loop=%s",
+                                content_id, watch.back_jumps, watch.early_loop)
+                    raise SourceLooping(content_id)
+                logger.info("TV relay leaving a stuttering source content_id=%s forward_steps=%d",
+                            content_id, watch.forward_steps)
+                raise SourceStuttering(content_id)
             yield chunk
     finally:
         watch.summary()

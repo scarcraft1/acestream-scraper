@@ -68,6 +68,8 @@ OUTCOME_VALUE = {
     # Played, but its clock kept going back: the viewer saw the same play
     # again and again. Low, and weighted by how long it was watched.
     'jumpy': 0.1,
+    # Played, but kept stepping ahead: the picture stopped and jumped (25-11).
+    'stutter': 0.1,
     # The viewer said the audio was wrong (03-11: radio commentary over the
     # match): it played, but not what they wanted. Weighted by how long it was
     # watched, like jumpy.

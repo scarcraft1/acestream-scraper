@@ -8,6 +8,20 @@ class StreamCheckScope(BaseModel):
     scope: Literal["all", "assigned", "favorites"]
 
 
+class StreamCheckViewing(BaseModel):
+    """What the scheduled stream check does while someone is watching.
+
+    ``pause`` waits for the viewer (for metered connections); ``slow`` keeps
+    checking with a gap between sources; ``continuous`` also starts the next
+    pass as soon as one ends. The last two need a dedicated checking engine.
+    """
+    mode: Literal["pause", "slow", "continuous"]
+
+
+class StreamCheckViewingResponse(StreamCheckViewing):
+    dedicated_checker: bool = Field(description="Whether a dedicated checking engine is configured")
+
+
 class PlaybackRouting(BaseModel):
     use_acexy: bool = Field(False, description="Route web, tuner and remote-player playback through Acexy")
     acexy_url: str = Field("http://localhost:8080", description="HTTP(S) origin where the backend reaches Acexy in MPEG-TS mode")

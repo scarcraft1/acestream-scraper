@@ -193,6 +193,7 @@ export const useUpdateCheckEngine = () => {
   const client = useQueryClient();
   return useMutation({ mutationFn: (config: CheckEngineConfig) => configService.updateCheckEngine(config), onSuccess: () => {
     void client.invalidateQueries({ queryKey: ['checkEngine'] });
+    void client.invalidateQueries({ queryKey: ['stream-check-viewing'] });
     void client.invalidateQueries({ queryKey: ['system', 'services'] });
   } });
 };

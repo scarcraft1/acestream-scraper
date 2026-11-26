@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from app.services.probe_queue import ProbePriority
 from app.services.task_service import task_service
 from app.services import viewing
+from app.services.config_service import ConfigService
+from app.repositories.settings_repository import SettingsRepository
 
 # How often a paused pass looks again whether someone is still watching.
 VIEWING_POLL_SECONDS = 5.0
@@ -18,6 +20,30 @@ VIEWING_POLL_SECONDS = 5.0
 # queue: a paused pass holds the guide refresh and the scraping behind it, so
 # it lets them through after this and the next pass tries again.
 VIEWING_MAX_PAUSE_SECONDS = 600.0
+# With a dedicated checker the pass may go on while someone watches
+# (Settings -> Automation, "slow" or "continuous"): one source every this
+# many seconds, so the checker's traffic stays small next to the viewer's.
+VIEWING_GAP_SECONDS = 30.0
+# "continuous": the next pass starts this long after one ends, so jobs queued
+# meanwhile (guide refresh, scraping) go first.
+CONTINUOUS_RESTART_SECONDS = 60.0
+
+
+async def gap_while_watching(seconds: float) -> bool:
+    """Wait ``seconds`` before the next source when someone is watching.
+
+    Returns whether it waited. Ends early on shutdown or when the viewer leaves.
+    """
+    if viewing.watching() is None:
+        return False
+    loop = asyncio.get_running_loop()
+    until = loop.time() + seconds
+    while not task_service.shutdown_event.is_set() and viewing.watching() is not None:
+        remaining = until - loop.time()
+        if remaining <= 0:
+            break
+        await asyncio.sleep(min(VIEWING_POLL_SECONDS, remaining))
+    return True
 
 
 async def wait_while_watching(logger, max_seconds: float) -> tuple[float, bool]:
@@ -55,8 +81,9 @@ def run_channel_status_task():
         channels = channels_in_check_order(db, http_only=http_only)
         if http_only and not channels:
             return {"checked": 0, "skipped": 0, "failed": 0, "message": "No engine configured; status checks are disabled.", "message_code": "CHECK_ENGINE_NOT_CONFIGURED"}
+        mode = ConfigService(SettingsRepository(db)).effective_stream_check_viewing()
         db.rollback()
-        logger.info(f"Starting channel status update for {len(channels)} channels.")
+        logger.info("Starting channel status update for %d channels (while watching: %s).", len(channels), mode)
 
         async def check_all():
             started = datetime.now(timezone.utc)
@@ -74,8 +101,15 @@ def run_channel_status_task():
                     break
                 # Between sources, never in the middle of one: a probe that
                 # started finishes and cleans up as before.
-                waited, gave_up = await wait_while_watching(logger, max_pause - paused)
-                paused += waited
+                if mode == "pause":
+                    waited, gave_up = await wait_while_watching(logger, max_pause - paused)
+                    paused += waited
+                else:
+                    # A slow pass can last hours; while someone watches it
+                    # gives way to the jobs queued behind it.
+                    gave_up = viewing.watching() is not None and task_service.maintenance_waiting()
+                    if not gave_up:
+                        await gap_while_watching(VIEWING_GAP_SECONDS)
                 if gave_up or task_service.shutdown_event.is_set():
                     stop_reason = "shutdown" if task_service.shutdown_event.is_set() else "viewing"
                     break
@@ -117,6 +151,8 @@ def run_channel_status_task():
             return result
 
         result = asyncio.run(check_all())
+        if mode == "continuous" and channels and result.get("stop_reason") != "shutdown":
+            task_service.run_again_in("channel_status", CONTINUOUS_RESTART_SECONDS)
         logger.info("Channel status task completed result=%s", result)
         notification_service.channel_status_completed(result)
         return result

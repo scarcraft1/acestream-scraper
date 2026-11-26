@@ -25,6 +25,7 @@ import ContentSection from '../layout/ContentSection';
 import ScheduleAnchorFields from '../ScheduleAnchorFields';
 import OfflineCleanupFields from '../settings/OfflineCleanupFields';
 import StreamCheckScopeField from '../StreamCheckScopeField';
+import StreamCheckViewingField from '../StreamCheckViewingField';
 
 import { useSettingDraft } from '../../hooks/useSettingDraft';
 type FeedbackSeverity = 'success' | 'error';
@@ -127,7 +128,7 @@ export default function AutomationSettings({ notify }: { notify: Notify }) {
       {<Button component={RouterLink} to="/recordings?tab=settings">{tUi("Recording settings")}</Button>}
       {<ContentSection title={tUi("Offline stream cleanup")}><OfflineCleanupFields /></ContentSection>}
       {<ContentSection title={tUi("Guide matching")}><GuideMatchingFields /></ContentSection>}
-      <ContentSection title={tUi("Stream status checks")}><CheckEngineFields /></ContentSection>
+      <ContentSection title={tUi("Stream status checks")}><Stack spacing={2}><CheckEngineFields /><StreamCheckViewingField /></Stack></ContentSection>
 
       <ContentSection title={tUi("Automation")} description={tUi("Background jobs run on these schedules. Changes apply right away.")}>
         <Stack spacing={2.5}>

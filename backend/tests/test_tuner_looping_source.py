@@ -19,6 +19,8 @@ from app.services.tuner_playback_service import relay_ranked_streams
 # Each chunk carries a PCR: steady, then two jumps back of 5.5 s (too small
 # for an early loop, so it takes the second one to turn jumpy).
 _LOOP = (100.0, 100.5, 95.0, 95.5, 90.0, 90.5)
+# Steps ahead of 4 s, chunk after chunk: stuttering at the 10th step.
+_STUTTER = tuple(10.0 + 4 * i for i in range(12))
 
 
 def _ts(pcr_seconds, pid=0x100):
@@ -38,7 +40,8 @@ def _relay(calls, sources):
         kind = sources[content_id]
         if kind == 'dead':
             await asyncio.sleep(10)
-        for i, t in enumerate(_LOOP if kind == 'loop' else (10.0, 10.5, 11.0, 11.5)):
+        pcrs = _LOOP if kind == 'loop' else _STUTTER if kind == 'stutter' else (10.0, 10.5, 11.0, 11.5)
+        for i, t in enumerate(pcrs):
             yield _ts(t)
     return relay
 
@@ -150,3 +153,16 @@ async def test_a_looping_source_the_viewer_left_is_kept_behind_too(monkeypatch):
     assert playback.prefer_recovered_sources(['loop', 'other'])[-1] == 'loop'
     with playback._failure_lock:
         assert playback._failures['loop'] > playback._failures['other'] + 1000
+
+
+@pytest.mark.asyncio
+async def test_a_stuttering_source_is_left_like_a_looping_one(monkeypatch):
+    # 25-11: a source stepped ahead 52 times in 21 min; the viewer saw it
+    # stop and jump. It is left for one not tried yet and kept as the last resort.
+    import app.services.tuner_playback_service as playback
+    calls = []
+    monkeypatch.setattr(playback, 'relay_engine_stream', _relay(calls, {'stut': 'stutter', 'good': 'good'}))
+    received = await _play(['stut', 'good'])
+    assert calls == ['stut', 'good', 'stut']
+    assert len(received) == 10 + 4 + 12
+    assert playback.failed_recently('stut')

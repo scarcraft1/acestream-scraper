@@ -227,3 +227,31 @@ def test_a_looping_source_plays_on_when_there_is_nothing_else():
         return [c async for c in watch_clock(_looping_source(), "abc", give_up=lambda: False)]
 
     assert len(asyncio.run(collect())) == 6
+
+
+def _pcr_chunk(seconds, pid=0x100):
+    base = int(seconds * 90000) & ((1 << 33) - 1)
+    pcr = bytes([(base >> 25) & 0xFF, (base >> 17) & 0xFF, (base >> 9) & 0xFF, (base >> 1) & 0xFF,
+                 ((base & 1) << 7) | 0x7E, 0x00])
+    adaptation = bytes([7, 0x10]) + pcr
+    packet = bytes([0x47, (pid >> 8) & 0x1F, pid & 0xFF, 0x30]) + adaptation + bytes(184 - len(adaptation))
+    return packet + bytes([0x47, (pid >> 8) & 0x1F, pid & 0xFF, 0x10]) + bytes(184)
+
+
+def test_frequent_steps_ahead_turn_stuttering_and_spread_ones_do_not():
+    from app.services.ts_clock import STUTTER_STEPS, STUTTER_WINDOW, ClockWatch
+    now = [0.0]
+    often = ClockWatch('a', clock=lambda: now[0])
+    for i in range(STUTTER_STEPS + 1):        # one 4 s step every 20 s
+        often.feed(_pcr_chunk(10.0 + 24.0 * i))
+        now[0] += 20.0
+    assert often.stuttering and often.doubtful and not often.jumpy
+
+    now[0] = 0.0
+    spread = ClockWatch('b', clock=lambda: now[0])
+    gap = STUTTER_WINDOW / (STUTTER_STEPS - 2)   # never STUTTER_STEPS inside one window
+    for i in range(3 * STUTTER_STEPS):
+        spread.feed(_pcr_chunk(10.0 + (gap + 4.0) * i))
+        now[0] += gap
+    assert spread.forward_steps == 3 * STUTTER_STEPS - 1
+    assert not spread.stuttering

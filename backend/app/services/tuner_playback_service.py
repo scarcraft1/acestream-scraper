@@ -17,7 +17,7 @@ from app.services.source_reader import Attempt, EngineReader, HttpReader, Source
 from app.services.stream_relay import EngineStreamError, RelayInfo, RelayRegistry, relay_engine_stream, relay_registry
 from app.services.tuner_remux import remux_source, compatible_audio_source
 from app.services.tuner_http_source import relay_http_stream
-from app.services.ts_clock import ClockWatch, SourceLooping, watch_clock
+from app.services.ts_clock import ClockWatch, SourceLooping, SourceStuttering, watch_clock
 from app.services.ts_nulls import drop_null_packets
 
 STARTUP_BUDGET_SECONDS = 45.0
@@ -150,7 +150,7 @@ def _reported(outcome: str, claim) -> str:
     """A source the viewer reported keeps the report as its outcome, however its
     viewing ends; one that never played keeps its own."""
     problem = getattr(claim, 'problem', None)
-    return problem if problem and outcome in ('ok', 'ended', 'stall', 'jumpy', 'handover') else outcome
+    return problem if problem and outcome in ('ok', 'ended', 'stall', 'jumpy', 'stutter', 'handover') else outcome
 
 
 class ViewingCheckpoint:
@@ -201,7 +201,9 @@ def _with_clock(outcome: str, watch: ClockWatch) -> str:
     """A source that played but kept jumping back in time repeated what the
     viewer had already seen (the same corner kick over and over): that is recorded against it, not as a good viewing. A source that
     never played keeps its own outcome."""
-    return 'jumpy' if watch.jumpy and outcome in ('ok', 'ended', 'stall') else outcome
+    if outcome not in ('ok', 'ended', 'stall'):
+        return outcome
+    return 'jumpy' if watch.jumpy else 'stutter' if watch.stuttering else outcome
 
 
 def _record_ok(opening: ChannelOpening | None, content_id: str, tv_channel_id: int | None,
@@ -474,6 +476,7 @@ async def relay_ranked_streams(
                                           NO_DATA_COOLDOWN_SECONDS if first_at is None and isinstance(exc, TimeoutError) else
                                           FAILURE_COOLDOWN_SECONDS)
                     outcome = (
+                        'stutter' if isinstance(exc, SourceStuttering) else
                         'jumpy' if left_looping else
                         'early_death' if early_death else
                         'stall' if first_at is not None and isinstance(exc, TimeoutError) else
@@ -495,6 +498,7 @@ async def relay_ranked_streams(
                     # Do not include upstream exception text: it can contain URLs
                     # with credentials. Keep EOF distinct from our read deadline.
                     reason = (
+                        'stuttering' if isinstance(exc, SourceStuttering) else
                         'looping' if left_looping else
                         'read_timeout' if isinstance(exc, TimeoutError) else
                         'upstream_eof' if isinstance(exc, StopAsyncIteration) else
@@ -508,7 +512,7 @@ async def relay_ranked_streams(
                         route, experimental_transcoding,
                     )
                 finally:
-                    if clock_watch.jumpy:
+                    if clock_watch.doubtful:
                         record_source_failure(content_id, JUMPY_COOLDOWN_SECONDS)
                     if outcome is None and first_at is not None:
                         # The viewer left, or a newer GET took over.

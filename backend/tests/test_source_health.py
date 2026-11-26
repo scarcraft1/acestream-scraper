@@ -100,7 +100,7 @@ def test_the_relay_order_is_a_pure_function_of_streams_history_and_now():
                row('e', False, 30), row('f', True, 1, bitrate=9000), row('g', None, None, order=0)]
     history = {'c' * 40: SimpleNamespace(score=0.9, demoted=False),
                'f' * 40: SimpleNamespace(score=0.1, demoted=True)}
-    assert relay_order(streams, history, NOW) == [k * 40 for k in 'gbacef']
+    assert relay_order(streams, history, NOW) == [k * 40 for k in 'gbface']
 
 
 # --- one writer of facts ------------------------------------------------------

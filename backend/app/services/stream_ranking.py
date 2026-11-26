@@ -120,7 +120,8 @@ def relay_order(streams: Iterable, history: Mapping, now: datetime) -> List[str]
     ``now``. A saved preference (#267) comes before all of what follows: the
     user's order for this channel is the relay's order. Then sources seen
     online, recent or not; never checked, or offline from an older check; a
-    demoted source after every group, and a discarded one
+    demoted source after every group, unless a check within
+    ``FRESH_CHECK_HOURS`` has just found it online, and a discarded one
     (``source_health.discarded``) after the demoted; neither is dropped. A
     source found offline recently is left out, unless it also played within ``FRESH_CHECK_HOURS``:
     a check right after the relay lets a source go can find no media, and
@@ -147,7 +148,10 @@ def relay_order(streams: Iterable, history: Mapping, now: datetime) -> List[str]
         else:
             group = 1
         past = history.get(stream.id.lower())
-        if past is not None and past.demoted:
+        # A check that has just found the source online outweighs a bad
+        # playback record (Óscar, 26-11): it stays with the online sources and
+        # its score puts it after those that played well more often.
+        if past is not None and past.demoted and not (stream.is_online and fresh):
             group = 2
         if discarded(stream, now):
             group = 3

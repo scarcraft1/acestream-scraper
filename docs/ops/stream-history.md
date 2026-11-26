@@ -50,7 +50,8 @@ recent offline results stay excluded. Within each group, sources rank by
   has published it for 14 days (`last_seen`), when its own recent history is
   clearly bad (decayed evidence ≥ 2 and score < 0.25), or when it has no
   history and at least 10 sources of its list are known with fewer than 20%
-  online.
+  online. A check within the last 6 hours that found it online outweighs the
+  demotion: it stays with the online sources, after those with a better score.
 
 - a *discarded* source (see below) goes after the demoted ones. It is still
   tried, never dropped, unless its last check found it offline less than 6

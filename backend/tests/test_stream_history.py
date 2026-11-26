@@ -121,8 +121,19 @@ def test_a_demoted_source_goes_after_every_other_group_but_stays(db_session):
     tv = _channel(db_session)
     _stream(db_session, 'a', tv, online=True, last_seen=datetime.now(timezone.utc) - timedelta(days=60))
     _stream(db_session, 'b', tv, online=None)
+    db_session.flush()
+    # Online from a check a day old: a fresh one would outweigh the demotion.
+    db_session.get(AcestreamChannel, 'a' * 40).last_checked = datetime.now(timezone.utc) - timedelta(hours=22)
     db_session.commit()
     assert TunerService(db_session).relay_stream_ids(tv.id) == ['b' * 40, 'a' * 40]
+
+
+def test_a_demoted_source_just_found_online_stays_with_the_online_ones(db_session):
+    tv = _channel(db_session)
+    _stream(db_session, 'a', tv, online=True, last_seen=datetime.now(timezone.utc) - timedelta(days=60))
+    _stream(db_session, 'b', tv, online=None)
+    db_session.commit()
+    assert TunerService(db_session).relay_stream_ids(tv.id) == ['a' * 40, 'b' * 40]
 
 
 def test_a_saved_preference_still_comes_first(db_session):

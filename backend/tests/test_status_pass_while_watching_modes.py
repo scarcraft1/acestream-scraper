@@ -83,7 +83,8 @@ def test_slow_goes_on_while_watching_one_source_every_30_s(db_session, monkeypat
     _, probed, requeued = _pass(db_session, monkeypatch, "slow")
     monkeypatch.setattr(viewing, "watching", lambda: "tv relay")
     result = channel_status_task.run_channel_status_task()
-    assert probed == [("a", 30.0), ("b", 60.0), ("c", 90.0)]
+    # No gap before the first source: the gap follows a source the pass opened.
+    assert probed == [("a", 0.0), ("b", 30.0), ("c", 60.0)]
     assert result["checked"] == 3 and "stop_reason" not in result
     assert requeued == []
 
@@ -104,13 +105,15 @@ def test_without_a_dedicated_checker_slow_still_pauses(db_session, monkeypatch):
 
 
 def test_a_slow_pass_gives_way_to_a_queued_job_while_watching(db_session, monkeypatch):
-    service, probed, _ = _pass(db_session, monkeypatch, "slow")
+    service, probed, requeued = _pass(db_session, monkeypatch, "slow")
     monkeypatch.setattr(viewing, "watching", lambda: "tv relay")
     waiting = iter([False, True])
     monkeypatch.setattr(service, "maintenance_waiting", lambda: next(waiting))
     result = channel_status_task.run_channel_status_task()
     assert [cid for cid, _ in probed] == ["a"]
     assert result["stop_reason"] == "viewing" and result["deferred"] == 2
+    # It resumes a minute later, after the job it let through.
+    assert requeued == [("channel_status", channel_status_task.CONTINUOUS_RESTART_SECONDS)]
 
 
 def test_continuous_starts_the_next_pass_a_minute_after_one_ends(db_session, monkeypatch):
@@ -139,3 +142,22 @@ def test_the_setting_needs_a_dedicated_checker(client, monkeypatch):
     assert client.put(PATH, json={"mode": "continuous"}).json() == {"mode": "continuous", "dedicated_checker": True}
     assert client.put(PATH, json={"mode": "often"}).status_code == 422
     assert client.get(PATH).json()["mode"] == "continuous"
+
+
+def test_skipped_sources_cost_no_gap(db_session, monkeypatch):
+    # 26-11 on the box: four sources skipped (checked moments ago, or the one
+    # being watched) took two minutes of gaps before the pass gave way.
+    _, probed, _ = _pass(db_session, monkeypatch, "slow")
+    monkeypatch.setattr(viewing, "watching", lambda: "tv relay")
+    import app.tasks.channel_status_task as task
+    real = task.ChannelStatusService
+
+    class Skipping(real):
+        async def check_channel_status(self, channel, **kwargs):
+            if channel.id in ("a", "b"):
+                return {"status": "skipped"}
+            return await super().check_channel_status(channel, **kwargs)
+
+    monkeypatch.setattr(task, "ChannelStatusService", Skipping)
+    result = task.run_channel_status_task()
+    assert result["skipped"] == 2 and probed == [("c", 0.0)]

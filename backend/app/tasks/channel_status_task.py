@@ -24,8 +24,8 @@ VIEWING_MAX_PAUSE_SECONDS = 600.0
 # (Settings -> Automation, "slow" or "continuous"): one source every this
 # many seconds, so the checker's traffic stays small next to the viewer's.
 VIEWING_GAP_SECONDS = 30.0
-# "continuous": the next pass starts this long after one ends, so jobs queued
-# meanwhile (guide refresh, scraping) go first.
+# "continuous": the next pass starts this long after one ends, and a "slow"
+# one this long after it gave way, so jobs queued meanwhile go first.
 CONTINUOUS_RESTART_SECONDS = 60.0
 
 
@@ -95,6 +95,9 @@ def run_channel_status_task():
             paused = 0.0
             max_pause = VIEWING_MAX_PAUSE_SECONDS
             stop_reason = None
+            # The gap follows a source the pass opened: skipped ones (checked
+            # moments ago, or the one being watched) cost the engine nothing.
+            opened_last = False
             for channel_id in channels:
                 if task_service.shutdown_event.is_set():
                     stop_reason = "shutdown"
@@ -108,8 +111,9 @@ def run_channel_status_task():
                     # A slow pass can last hours; while someone watches it
                     # gives way to the jobs queued behind it.
                     gave_up = viewing.watching() is not None and task_service.maintenance_waiting()
-                    if not gave_up:
+                    if not gave_up and opened_last:
                         await gap_while_watching(VIEWING_GAP_SECONDS)
+                opened_last = False
                 if gave_up or task_service.shutdown_event.is_set():
                     stop_reason = "shutdown" if task_service.shutdown_event.is_set() else "viewing"
                     break
@@ -124,6 +128,7 @@ def run_channel_status_task():
                     if result['status'] == 'skipped':
                         skipped += 1
                     else:
+                        opened_last = True
                         checked += 1
                         if result["is_online"]:
                             online += 1
@@ -131,6 +136,7 @@ def run_channel_status_task():
                             offline += 1
                 except Exception as exc:
                     failed += 1
+                    opened_last = True
                     db.rollback()
                     logger.exception("Channel status check failed channel_id=%s error=%s", channel_id, exc)
                 finally:
@@ -151,7 +157,10 @@ def run_channel_status_task():
             return result
 
         result = asyncio.run(check_all())
-        if mode == "continuous" and channels and result.get("stop_reason") != "shutdown":
+        # A slow pass that gave way resumes after the job it let through,
+        # not an interval later; a continuous one always starts again.
+        gave_way = mode == "slow" and result.get("stop_reason") == "viewing"
+        if channels and (mode == "continuous" or gave_way) and result.get("stop_reason") != "shutdown":
             task_service.run_again_in("channel_status", CONTINUOUS_RESTART_SECONDS)
         logger.info("Channel status task completed result=%s", result)
         notification_service.channel_status_completed(result)

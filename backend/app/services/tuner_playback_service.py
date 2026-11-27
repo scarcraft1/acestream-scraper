@@ -29,6 +29,18 @@ ATTEMPT_SECONDS = 15.0
 # was never silent for more than 4.6 s. 25 s is above the longest gap seen.
 STALL_SECONDS = 25.0
 HEALTHY_SECONDS = 30.0
+# A source that has played HEALTHY_SECONDS is waited for longer before the
+# relay gives it up: 26-11 the relay left a source the viewer liked after 25 s
+# of silence, and the two after it died or had no commentary. The viewer
+# asked to wait about a minute. The waiting card still cuts in at
+# STALL_SECONDS (channel_session), so the screen does not stay frozen.
+# A factor, not a second constant, so the two move together (60 s today).
+PLAYING_STALL_FACTOR = 2.4
+
+
+def stall_seconds(played: float) -> float:
+    """How long the relay waits for a source's next chunk, given how long it has played."""
+    return STALL_SECONDS * PLAYING_STALL_FACTOR if played >= HEALTHY_SECONDS else STALL_SECONDS
 # Kodi opens a channel with two GETs and closes the first one; the engine
 # session outlives a closed client this long, so the second GET finds the
 # source still running instead of starting it cold (measured: 1.8 s more on
@@ -446,7 +458,7 @@ async def relay_ranked_streams(
                         opening.current_deadline = None
                     yield first
                     while True:
-                        with anyio.fail_after(STALL_SECONDS) as timer[0]:
+                        with anyio.fail_after(stall_seconds(last_at - first_at)) as timer[0]:
                             chunk = await anext(iterator)
                         last_at = time.monotonic()
                         yield chunk

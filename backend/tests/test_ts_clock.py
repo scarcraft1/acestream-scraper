@@ -91,7 +91,7 @@ def test_a_step_ahead_between_two_samples_is_logged_even_without_a_wall_jump(cap
         for t in (10.0, 10.5, 18.0, 18.5):
             watch.feed(_chunk(t))
             clock.now += 0.5
-    assert [r.getMessage() for r in caplog.records] == ["TV relay source clock stepped ahead 7.5 s content_id=abc"]
+    assert [r.getMessage() for r in caplog.records] == ["TV relay source clock stepped ahead 7.5 s after 0.5 s content_id=abc"]
     assert watch.forward_steps == 1 and not watch.jumpy
 
 
@@ -238,13 +238,14 @@ def _pcr_chunk(seconds, pid=0x100):
     return packet + bytes([0x47, (pid >> 8) & 0x1F, pid & 0xFF, 0x10]) + bytes(184)
 
 
-def test_frequent_steps_ahead_turn_stuttering_and_spread_ones_do_not():
-    from app.services.ts_clock import STUTTER_STEPS, STUTTER_WINDOW, ClockWatch
+def test_frequent_steps_ahead_after_a_wait_turn_stuttering_and_spread_ones_do_not():
+    from app.services.ts_clock import STUTTER_STEPS, STUTTER_WINDOW, VISIBLE_WAIT_SECONDS, ClockWatch
     now = [0.0]
+    wait = VISIBLE_WAIT_SECONDS + 1.0
     often = ClockWatch('a', clock=lambda: now[0])
-    for i in range(STUTTER_STEPS + 1):        # one 4 s step every 20 s
-        often.feed(_pcr_chunk(10.0 + 24.0 * i))
-        now[0] += 20.0
+    for i in range(STUTTER_STEPS + 1):        # a 4 s step after each wait, back to back
+        often.feed(_pcr_chunk(10.0 + (wait + 4.0) * i))
+        now[0] += wait
     assert often.stuttering and often.doubtful and not often.jumpy
 
     now[0] = 0.0
@@ -255,3 +256,31 @@ def test_frequent_steps_ahead_turn_stuttering_and_spread_ones_do_not():
         now[0] += gap
     assert spread.forward_steps == 3 * STUTTER_STEPS - 1
     assert not spread.stuttering
+
+
+def test_steps_ahead_with_no_wait_before_them_do_not_count():
+    # 26-11: the source with the commentary the viewer wanted stepped ahead
+    # 3-9 s about once every 40 s without a visible wait, and the viewer did
+    # not mind; the relay had left it at ten steps in five minutes.
+    from app.services.ts_clock import STUTTER_STEPS, ClockWatch
+    now = [0.0]
+    watch = ClockWatch('a', clock=lambda: now[0])
+    for i in range(6 * STUTTER_STEPS):        # steps back to back, half a second apart
+        watch.feed(_pcr_chunk(10.0 + 4.5 * i))
+        now[0] += 0.5
+    assert watch.forward_steps == 6 * STUTTER_STEPS - 1
+    assert watch.waited_steps == 0
+    assert not watch.stuttering and not watch.doubtful
+
+
+def test_the_step_line_says_how_long_the_source_waited_before_it(caplog):
+    from app.services.ts_clock import ClockWatch
+    now = [0.0]
+    watch = ClockWatch('abc', clock=lambda: now[0])
+    with caplog.at_level(logging.INFO, logger=ts_clock.__name__):
+        watch.feed(_pcr_chunk(10.0))
+        now[0] += 6.0
+        watch.feed(_pcr_chunk(20.0))
+    assert [r.getMessage() for r in caplog.records] == [
+        "TV relay source clock stepped ahead 10.0 s after 6.0 s content_id=abc"]
+    assert watch.waited_steps == 1

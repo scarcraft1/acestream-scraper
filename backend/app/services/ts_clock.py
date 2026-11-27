@@ -43,11 +43,16 @@ EARLY_SECONDS = 30.0             # from the first PCR of this attempt
 EARLY_MIN_BACK = 10.0
 EARLY_MAX_BACK = 1800.0
 # 25-11: a source stepped ahead 3-7 s 52 times in 21 min and the viewer saw
-# it stop and jump; the one that played well after it did so twice in 50
-# min, and one with 13 in 27 min played fine. STUTTER_STEPS in STUTTER_WINDOW
-# sits between them (about one step every 30 s).
+# it stop and jump. 26-11: ten steps in five minutes left a source with ~8
+# steps every five minutes that the viewer liked (the one with the commentary
+# they wanted) for two worse ones. The viewer (26-11): a step ahead bothers
+# only when Kodi waits for it too, and only very often, 15-20 a minute; a
+# jump back always bothers (JUMPY_BACK_JUMPS). So a step counts only after a
+# wait of VISIBLE_WAIT_SECONDS without the source's clock moving, and the
+# source is left at STUTTER_STEPS of those in STUTTER_WINDOW.
+VISIBLE_WAIT_SECONDS = 2.0
 STUTTER_STEPS = 10
-STUTTER_WINDOW = 300.0
+STUTTER_WINDOW = 60.0
 
 
 def _sync_offset(chunk: bytes) -> Optional[int]:
@@ -81,6 +86,7 @@ class ClockWatch:
         self.pcr_samples = 0
         self.worst_back = 0.0
         self.forward_steps = 0
+        self.waited_steps = 0
         self._step_times = []
         self.first_at = None
         self.last_at = None
@@ -91,7 +97,8 @@ class ClockWatch:
 
     @property
     def stuttering(self) -> bool:
-        """Stepping ahead often: the viewer sees the picture stop and jump."""
+        """Stepping ahead often after a wait: the viewer sees the picture
+        stop, wait and jump."""
         if self.last_at is None:
             return False
         since = self.last_at - STUTTER_WINDOW
@@ -144,9 +151,18 @@ class ClockWatch:
                 self._report("TV relay source clock jumped ahead %.1f s content_id=%s", delta - elapsed)
             elif delta > STEP_SECONDS:
                 self.forward_steps += 1
-                self._step_times = [t for t in self._step_times if t >= now - STUTTER_WINDOW] + [now]
-                self._report("TV relay source clock stepped ahead %.1f s content_id=%s", delta)
+                if elapsed >= VISIBLE_WAIT_SECONDS:
+                    self.waited_steps += 1
+                    self._step_times = [t for t in self._step_times if t >= now - STUTTER_WINDOW] + [now]
+                self._report_step(delta, elapsed)
         self._last, self._last_at = seconds, now
+
+    def _report_step(self, delta: float, elapsed: float) -> None:
+        now = self._clock()
+        if now >= self._quiet_until:
+            logger.info("TV relay source clock stepped ahead %.1f s after %.1f s content_id=%s",
+                        delta, elapsed, self.content_id)
+            self._quiet_until = now + QUIET_SECONDS
 
     def _report(self, message: str, seconds: float) -> None:
         now = self._clock()
@@ -158,9 +174,9 @@ class ClockWatch:
         """Always written, so a viewing without jumps can be told from a
         watch that saw no PCR at all (pcr_samples=0)."""
         logger.info("TV relay source clock summary content_id=%s back_jumps=%d worst_back=%.1f s forward_steps=%d"
-                    " pcr_samples=%d early_loop=%s",
+                    " waited_steps=%d pcr_samples=%d early_loop=%s",
                     self.content_id, self.back_jumps, self.worst_back, self.forward_steps,
-                    self.pcr_samples, self.early_loop)
+                    self.waited_steps, self.pcr_samples, self.early_loop)
 
 
 class SourceLooping(Exception):

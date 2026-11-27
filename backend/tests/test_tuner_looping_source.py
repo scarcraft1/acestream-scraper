@@ -160,6 +160,10 @@ async def test_a_stuttering_source_is_left_like_a_looping_one(monkeypatch):
     # 25-11: a source stepped ahead 52 times in 21 min; the viewer saw it
     # stop and jump. It is left for one not tried yet and kept as the last resort.
     import app.services.tuner_playback_service as playback
+    import app.services.ts_clock as ts_clock
+    # The fake source sends its steps back to back; count them as if Kodi had
+    # waited before each one (26-11: only a step after a wait counts).
+    monkeypatch.setattr(ts_clock, 'VISIBLE_WAIT_SECONDS', 0.0)
     calls = []
     monkeypatch.setattr(playback, 'relay_engine_stream', _relay(calls, {'stut': 'stutter', 'good': 'good'}))
     received = await _play(['stut', 'good'])
